@@ -15,6 +15,17 @@ if (fs.existsSync(envPath)) {
 
 const app = express();
 const PORT = 3000;
+const PUBLIC_BASE_PATH = normalizeBasePath(process.env.PUBLIC_BASE_PATH);
+
+function normalizeBasePath(value) {
+  const trimmed = (value || '').trim().replace(/\/+$/, '');
+  if (!trimmed || trimmed === '/') return '';
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+function routePath(pathname) {
+  return `${PUBLIC_BASE_PATH}${pathname}`;
+}
 
 // ============================================================
 //  配置
@@ -80,14 +91,21 @@ function saveCustomVoices(voices) {
 let customVoices = loadCustomVoices();
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+
+const publicDir = path.join(__dirname, 'public');
+if (PUBLIC_BASE_PATH) {
+  app.get(PUBLIC_BASE_PATH, (req, res) => res.redirect(`${PUBLIC_BASE_PATH}/`));
+  app.use(`${PUBLIC_BASE_PATH}/`, express.static(publicDir));
+} else {
+  app.use(express.static(publicDir));
+}
 
 // ============================================================
 //  API 接口
 // ============================================================
 
 // 获取音色列表（内置 + 自定义）
-app.get('/api/voices', (req, res) => {
+app.get(routePath('/api/voices'), (req, res) => {
   const allVoices = [
     ...BUILTIN_VOICES,
     ...customVoices.map(v => ({ ...v, type: 'custom' })),
@@ -96,7 +114,7 @@ app.get('/api/voices', (req, res) => {
 });
 
 // 语音合成接口
-app.post('/api/tts', async (req, res) => {
+app.post(routePath('/api/tts'), async (req, res) => {
   const { text, voice } = req.body;
 
   if (!text || !voice) {
@@ -159,7 +177,7 @@ app.post('/api/tts', async (req, res) => {
 // ============================================================
 
 // 创建克隆音色
-app.post('/api/voice-clone', async (req, res) => {
+app.post(routePath('/api/voice-clone'), async (req, res) => {
   const { audioBase64, voiceName, audioText, language } = req.body;
 
   if (!audioBase64 || !voiceName) {
@@ -228,7 +246,7 @@ app.post('/api/voice-clone', async (req, res) => {
 });
 
 // 删除克隆音色
-app.delete('/api/voice-clone/:voiceId', async (req, res) => {
+app.delete(routePath('/api/voice-clone/:voiceId'), async (req, res) => {
   const { voiceId } = req.params;
   const voice = customVoices.find(v => v.id === voiceId);
 

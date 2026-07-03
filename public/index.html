@@ -491,7 +491,7 @@
 
     async function loadVoices() {
       try {
-        const res = await fetch('/api/voices');
+        const res = await fetch('api/voices');
         const data = await res.json();
         voices = data.voices;
       } catch (e) {
@@ -640,7 +640,7 @@
       btn.disabled = true;
 
       try {
-        const response = await fetch('/api/voice-clone', {
+        const response = await fetch('api/voice-clone', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -682,7 +682,7 @@
       if (!confirm(`确定要删除音色 "${voiceName}" 吗？`)) return;
 
       try {
-        const response = await fetch(`/api/voice-clone/${encodeURIComponent(voiceId)}`, {
+        const response = await fetch(`api/voice-clone/${encodeURIComponent(voiceId)}`, {
           method: 'DELETE',
         });
 
@@ -717,7 +717,7 @@
       btn.disabled = true;
 
       try {
-        const response = await fetch('/api/tts', {
+        const response = await fetch('api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, voice: selectedVoice }),
