@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Qwen3-TTS 语音合成</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+      padding: 40px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .form-group textarea {
+      width: 100%;
+      min-height: 160px;
+      padding: 16px;
+      border: 2px solid #e8e8e8;
+      border-radius: 12px;
+      font-size: 15px;
+      line-height: 1.6;
+      resize: vertical;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group textarea::placeholder {
+      color: #aaa;
+    }
+
+    .voice-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .voice-card {
+      padding: 12px;
+      border: 2px solid #e8e8e8;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .voice-card:hover {
+      border-color: #667eea;
+      background: #f8f7ff;
+    }
+
+    .voice-card.active {
+      border-color: #667eea;
+      background: linear-gradient(135deg, rgba(102,126,234,0.08), rgba(118,75,162,0.08));
+    }
+
+    .voice-card .voice-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+    }
+
+    .voice-card .voice-desc {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .generate-btn {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .generate-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.35);
+    }
+
+    .generate-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .generate-btn .spinner {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .generate-btn.loading .spinner {
+      display: block;
+    }
+
+    .generate-btn.loading .btn-text {
+      display: none;
+    }
+
+    .generate-btn.loading .btn-loading-text {
+      display: inline;
+    }
+
+    .btn-loading-text {
+      display: none;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* 结果区域 */
+    .result-section {
+      margin-top: 28px;
+      display: none;
+    }
+
+    .result-section.show {
+      display: block;
+    }
+
+    .result-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 12px;
+    }
+
+    .audio-player-wrapper {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .audio-player-wrapper audio {
+      width: 100%;
+      outline: none;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 10px 20px;
+      background: #f0f0f0;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #333;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .download-btn:hover {
+      background: #e0e0e0;
+    }
+
+    /* 错误提示 */
+    .error-msg {
+      margin-top: 16px;
+      padding: 14px 18px;
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      border-radius: 10px;
+      color: #cf1322;
+      font-size: 14px;
+      display: none;
+    }
+
+    .error-msg.show {
+      display: block;
+    }
+
+    /* 字数统计 */
+    .char-count {
+      text-align: right;
+      font-size: 12px;
+      color: #888;
+      margin-top: 6px;
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 24px;
+      }
+
+      .header h1 {
+        font-size: 22px;
+      }
+
+      .voice-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎙️ Qwen3-TTS 语音合成</h1>
+      <p>输入文案，选择音色，一键生成高质量语音</p>
+    </div>
+
+    <div class="form-group">
+      <label>📝 文案内容</label>
+      <textarea id="textInput" placeholder="请输入要转换为语音的文案内容...&#10;&#10;支持中文、英文等多种语言，最长支持 2000 字。"></textarea>
+      <div class="char-count"><span id="charCount">0</span> / 2000</div>
+    </div>
+
+    <div class="form-group">
+      <label>🎤 选择音色</label>
+      <div class="voice-grid" id="voiceGrid">
+        <!-- 动态生成 -->
+      </div>
+    </div>
+
+    <button class="generate-btn" id="generateBtn" onclick="generateAudio()">
+      <div class="spinner"></div>
+      <span class="btn-text">🔊 生成语音</span>
+      <span class="btn-loading-text">正在生成中...</span>
+    </button>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="result-section" id="resultSection">
+      <div class="result-label">🎧 生成结果</div>
+      <div class="audio-player-wrapper">
+        <audio id="audioPlayer" controls></audio>
+        <button class="download-btn" onclick="downloadAudio()">
+          ⬇️ 下载音频
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let voices = [];
+    let selectedVoice = '';
+    let audioBlob = null;
+
+    // 初始化
+    async function init() {
+      try {
+        const res = await fetch('/api/voices');
+        const data = await res.json();
+        voices = data.voices;
+        renderVoiceGrid();
+      } catch (e) {
+        console.error('加载音色列表失败:', e);
+      }
+    }
+
+    // 渲染音色卡片
+    function renderVoiceGrid() {
+      const grid = document.getElementById('voiceGrid');
+      grid.innerHTML = voices.map((v, i) => `
+        <div class="voice-card ${i === 0 ? 'active' : ''}"
+             data-voice="${v.id}"
+             onclick="selectVoice('${v.id}', this)">
+          <div class="voice-name">${v.name}</div>
+          <div class="voice-desc">${v.desc}</div>
+        </div>
+      `).join('');
+
+      if (voices.length > 0) {
+        selectedVoice = voices[0].id;
+      }
+    }
+
+    // 选择音色
+    function selectVoice(voiceId, el) {
+      selectedVoice = voiceId;
+      document.querySelectorAll('.voice-card').forEach(card => {
+        card.classList.remove('active');
+      });
+      el.classList.add('active');
+    }
+
+    // 字数统计
+    document.getElementById('textInput').addEventListener('input', function () {
+      const count = this.value.length;
+      document.getElementById('charCount').textContent = count;
+    });
+
+    // 生成语音
+    async function generateAudio() {
+      const text = document.getElementById('textInput').value.trim();
+      const btn = document.getElementById('generateBtn');
+      const errorMsg = document.getElementById('errorMsg');
+      const resultSection = document.getElementById('resultSection');
+
+      // 隐藏错误和结果
+      errorMsg.classList.remove('show');
+      resultSection.classList.remove('show');
+
+      // 验证
+      if (!text) {
+        showError('请输入文案内容');
+        return;
+      }
+
+      if (!selectedVoice) {
+        showError('请选择音色');
+        return;
+      }
+
+      if (text.length > 2000) {
+        showError('文案内容不能超过 2000 字');
+        return;
+      }
+
+      // 开始生成
+      btn.classList.add('loading');
+      btn.disabled = true;
+
+      try {
+        const response = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: text,
+            voice: selectedVoice,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `请求失败 (${response.status})`);
+        }
+
+        // 获取音频数据
+        audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audioPlayer = document.getElementById('audioPlayer');
+        audioPlayer.src = audioUrl;
+
+        // 显示结果
+        resultSection.classList.add('show');
+      } catch (error) {
+        showError(error.message || '生成失败，请稍后重试');
+      } finally {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      }
+    }
+
+    // 下载音频
+    function downloadAudio() {
+      if (!audioBlob) return;
+
+      const url = URL.createObjectURL(audioBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qwen3_tts_${Date.now()}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 显示错误
+    function showError(msg) {
+      const errorMsg = document.getElementById('errorMsg');
+      errorMsg.textContent = '❌ ' + msg;
+      errorMsg.classList.add('show');
+    }
+
+    // 启动
+    init();
+  </script>
+</body>
+</html>

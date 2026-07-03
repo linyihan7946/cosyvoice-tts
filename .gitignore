@@ -1,0 +1,24 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# 环境变量（包含 API Key，禁止提交）
+.env
+
+# 测试生成的音频文件
+*.wav
+*.mp3
+test_*.wav
+test_*.mp3
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# 日志
+*.log
+npm-debug.log*
