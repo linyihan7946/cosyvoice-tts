@@ -94,8 +94,16 @@ app.use(express.json({ limit: '10mb' }));
 
 const publicDir = path.join(__dirname, 'public');
 if (PUBLIC_BASE_PATH) {
-  app.get(PUBLIC_BASE_PATH, (req, res) => res.redirect(`${PUBLIC_BASE_PATH}/`));
-  app.use(`${PUBLIC_BASE_PATH}/`, express.static(publicDir));
+  app.get(PUBLIC_BASE_PATH, (req, res, next) => {
+    if (req.path === PUBLIC_BASE_PATH) {
+      return res.redirect(301, `${PUBLIC_BASE_PATH}/`);
+    }
+    return next();
+  });
+  app.get(`${PUBLIC_BASE_PATH}/`, (req, res) => {
+    res.sendFile(path.join(publicDir, 'index.html'));
+  });
+  app.use(PUBLIC_BASE_PATH, express.static(publicDir, { redirect: false }));
 } else {
   app.use(express.static(publicDir));
 }
