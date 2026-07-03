@@ -12,7 +12,7 @@
 ### 核心功能
 
 - 文本转语音（TTS）
-- 音色克隆（Voice Clone）：上传 3 秒音频即可克隆专属音色
+- 音色克隆（Voice Clone）：上传 15~20 秒音频即可克隆专属音色
 - 克隆音色管理：创建、查询、删除
 
 ---
@@ -171,7 +171,7 @@ cosyvoice-tts/
 }
 ```
 
-- `audioBase64`：base64 编码的音频数据（支持 wav/mp3/m4a，3~30 秒）
+- `audioBase64`：base64 编码的音频数据（支持 wav/mp3/m4a，15~20 秒，前端会校验时长）
 - `voiceName`：音色名称（英文字母、数字、下划线，最长 16 字符）
 - `language`：音频语种（zh/en/ja/ko/fr/de）
 
@@ -244,4 +244,5 @@ npm start          # 或 npm run dev
 3. **音频格式**：qwen3-tts-flash 返回 WAV 格式（24000Hz, 16-bit, mono）
 4. **模型匹配**：克隆音色必须使用 `qwen3-tts-vc-2026-01-22` 模型合成，TTS 接口会自动检测音色类型并选择正确模型
 5. **音色命名**：克隆音色名称只允许英文字母、数字、下划线，最长 16 字符
-6. **依赖**：仅 express 和 node-fetch 两个依赖，无需额外安装
+6. **克隆音频要求**：15~20 秒，最大 20MB，前端通过 HTML5 Audio API 校验时长
+7. **依赖**：仅 express 和 node-fetch 两个依赖，无需额外安装
