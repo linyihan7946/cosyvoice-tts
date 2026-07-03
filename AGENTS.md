@@ -7,7 +7,13 @@
 ## 项目概述
 
 基于阿里百炼 **qwen3-tts-flash** 模型的语音合成 Web 应用。
-将文本转换为高质量语音（WAV 格式，24000Hz），支持 17 种音色。
+将文本转换为高质量语音（WAV 格式，24000Hz），支持 17 种内置音色 + 自定义音色克隆。
+
+### 核心功能
+
+- 文本转语音（TTS）
+- 音色克隆（Voice Clone）：上传 3 秒音频即可克隆专属音色
+- 克隆音色管理：创建、查询、删除
 
 ---
 
@@ -17,7 +23,8 @@
 |---|---|
 | 后端 | Node.js + Express |
 | 前端 | 原生 HTML/CSS/JS（无框架） |
-| TTS 模型 | 阿里百炼 qwen3-tts-flash |
+| TTS 模型 | 阿里百炼 qwen3-tts-flash（内置音色）/ qwen3-tts-vc-2026-01-22（克隆音色） |
+| 音色克隆 | qwen-voice-enrollment |
 | 依赖 | express, node-fetch |
 
 ---
@@ -26,12 +33,15 @@
 
 ```
 cosyvoice-tts/
-├── .env                # API Key 配置
+── .env                # API Key 配置（禁止提交）
+├── .gitignore          # Git 忽略规则
 ├── server.js           # Express 后端服务
 ├── package.json        # 项目配置和依赖
 ├── agents.md           # 本文档（项目架构记录）
+├── README.md           # GitHub 项目说明
+├── custom_voices.json  # 自定义音色持久化存储
 ├── public/
-│   └── index.html      # 前端单页应用
+│   └── index.html      # 前端单页应用（含 Tab 切换）
 └── node_modules/
 ```
 
@@ -41,24 +51,21 @@ cosyvoice-tts/
 
 ### 端点
 
-- **主端点（DashScope 原生）**:
-  `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`
-- **备用端点（MaaS）**:
-  `https://llm-epwm5xmzoslfuxyh.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`
+| 用途 | 端点 |
+|---|---|
+| **TTS 合成** | `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation` |
+| **音色克隆/管理** | `https://dashscope.aliyuncs.com/api/v1/services/audio/tts/customization` |
 
-### 请求格式
+### TTS 请求格式
 
 ```json
 {
   "model": "qwen3-tts-flash",
-  "input": {
-    "text": "要转换的文本",
-    "voice": "Cherry"
-  }
+  "input": { "text": "要转换的文本", "voice": "Cherry" }
 }
 ```
 
-### 响应格式
+### TTS 响应格式
 
 ```json
 {
@@ -74,7 +81,31 @@ cosyvoice-tts/
 }
 ```
 
-响应中的 `url` 是 OSS 临时链接，需要再次请求下载 WAV 音频文件。
+### 音色克隆请求格式
+
+```json
+{
+  "model": "qwen-voice-enrollment",
+  "input": {
+    "action": "create",
+    "target_model": "qwen3-tts-vc-2026-01-22",
+    "preferred_name": "myvoice",
+    "audio": { "data": "data:audio/wav;base64,..." },
+    "language": "zh"
+  }
+}
+```
+
+### 音色克隆响应格式
+
+```json
+{
+  "output": {
+    "voice": "qwen-tts-vc-myvoice-voice-20260703...",
+    "target_model": "qwen3-tts-vc-2026-01-22"
+  }
+}
+```
 
 ### 认证
 
@@ -84,7 +115,7 @@ cosyvoice-tts/
 
 ---
 
-## 可用音色（17 种）
+## 内置音色（17 种）
 
 | ID | 名称 | 描述 | 方言 |
 |---|---|---|---|
@@ -112,7 +143,7 @@ cosyvoice-tts/
 
 ### GET /api/voices
 
-返回所有可用音色列表。
+返回所有可用音色列表（内置 + 自定义），每个音色包含 `type: "builtin" | "custom"`。
 
 ### POST /api/tts
 
@@ -121,17 +152,68 @@ cosyvoice-tts/
 { "text": "文本内容", "voice": "Cherry" }
 ```
 
+自动检测音色类型：
+- 内置音色 → 使用 `qwen3-tts-flash` 模型
+- 克隆音色（voice 以 `qwen-tts-vc-` 开头）→ 使用 `qwen3-tts-vc-2026-01-22` 模型
+
 响应：直接返回 WAV 音频二进制数据（`audio/wav`）。
+
+### POST /api/voice-clone
+
+创建克隆音色。
+
+请求体：
+```json
+{
+  "audioBase64": "data:audio/wav;base64,...",
+  "voiceName": "myvoice",
+  "language": "zh"
+}
+```
+
+- `audioBase64`：base64 编码的音频数据（支持 wav/mp3/m4a，3~30 秒）
+- `voiceName`：音色名称（英文字母、数字、下划线，最长 16 字符）
+- `language`：音频语种（zh/en/ja/ko/fr/de）
+
+### DELETE /api/voice-clone/:voiceId
+
+删除克隆音色（同时从百炼平台和本地存储中删除）。
 
 ---
 
 ## 前端功能
 
+### 语音合成 Tab
 - 文本输入（最大 2000 字符，实时字数统计）
-- 音色选择卡片网格
+- 音色选择卡片网格（内置 + 自定义，带类型标签）
 - 生成语音按钮（带 loading 状态）
 - 音频播放器（HTML5 audio）
 - 下载按钮（保存为 `qwen3_tts_<timestamp>.wav`）
+
+### 音色克隆 Tab
+- 音频文件上传（点击或拖拽，支持 wav/mp3/m4a，最大 20MB）
+- 音色名称输入
+- 语种选择
+- 克隆按钮（带 loading 状态）
+- 已克隆音色列表（支持删除）
+- 成功/错误提示
+
+---
+
+## 音色克隆存储
+
+自定义音色持久化存储在 `custom_voices.json` 文件中：
+
+```json
+[
+  {
+    "id": "qwen-tts-vc-myvoice-voice-...",
+    "name": "myvoice",
+    "desc": "自定义克隆音色",
+    "createdAt": "2026-07-03T02:13:41.542Z"
+  }
+]
+```
 
 ---
 
@@ -150,7 +232,8 @@ npm start          # 或 npm run dev
 | 日期 | 变更内容 |
 |---|---|
 | 2026-07-02 | 项目初始化，使用 CosyVoice + DashScope 原生 API |
-| 2026-07-02 | 切换为 qwen3-tts-flash 模型，使用 multimodal-generation 端点；新增 17 种音色支持；新增 MaaS 端点支持 |
+| 2026-07-02 | 切换为 qwen3-tts-flash 模型，使用 multimodal-generation 端点；新增 17 种音色支持 |
+| 2026-07-03 | **新增音色克隆功能**：支持上传音频克隆专属音色；新增 /api/voice-clone 创建/删除接口；前端新增「音色克隆」Tab；自定义音色持久化存储到 custom_voices.json |
 
 ---
 
@@ -159,5 +242,6 @@ npm start          # 或 npm run dev
 1. **更新 agents.md**：每次新增功能或修改架构后，必须同步更新本文档
 2. **API Key 安全**：Key 存储在 `.env` 中，不要提交到版本控制
 3. **音频格式**：qwen3-tts-flash 返回 WAV 格式（24000Hz, 16-bit, mono）
-4. **MaaS 切换**：设置 `USE_MAAS=true` 可切换到 MaaS 端点
-5. **依赖**：仅 express 和 node-fetch 两个依赖，无需额外安装
+4. **模型匹配**：克隆音色必须使用 `qwen3-tts-vc-2026-01-22` 模型合成，TTS 接口会自动检测音色类型并选择正确模型
+5. **音色命名**：克隆音色名称只允许英文字母、数字、下划线，最长 16 字符
+6. **依赖**：仅 express 和 node-fetch 两个依赖，无需额外安装
