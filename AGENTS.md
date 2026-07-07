@@ -234,6 +234,7 @@ npm start          # 或 npm run dev
 | 2026-07-02 | 项目初始化，使用 CosyVoice + DashScope 原生 API |
 | 2026-07-02 | 切换为 qwen3-tts-flash 模型，使用 multimodal-generation 端点；新增 17 种音色支持 |
 | 2026-07-03 | **新增音色克隆功能**：支持上传音频克隆专属音色；新增 /api/voice-clone 创建/删除接口；前端新增「音色克隆」Tab；自定义音色持久化存储到 custom_voices.json |
+| 2026-07-07 | **新增手机短信验证登录与账号管理**：引入 SQLite 数据库（better-sqlite3）；新增用户系统（users 表）；新增 JWT 认证（jsonwebtoken）；新增 /api/auth/send-code、/api/auth/login、/api/auth/me、/api/auth/admin/stats 接口；音色克隆数据从 JSON 迁移到 SQLite 并关联 user_id；音色按用户隔离（当前用户只看到自己的克隆音色）；前端新增登录页面 + 用户状态栏 + 管理员统计面板；支持 UniSMS 短信发送 |
 
 ---
 
@@ -245,4 +246,8 @@ npm start          # 或 npm run dev
 4. **模型匹配**：克隆音色必须使用 `qwen3-tts-vc-2026-01-22` 模型合成，TTS 接口会自动检测音色类型并选择正确模型
 5. **音色命名**：克隆音色名称只允许英文字母、数字、下划线，最长 16 字符
 6. **克隆音频要求**：15~20 秒，最大 20MB，前端通过 HTML5 Audio API 校验时长
-7. **依赖**：仅 express 和 node-fetch 两个依赖，无需额外安装
+7. **依赖**：express、node-fetch、better-sqlite3、jsonwebtoken
+8. **认证**：所有 TTS/克隆接口需要 JWT 认证（Authorization: Bearer <token>），未登录返回 401
+9. **音色隔离**：每个用户只能看到/使用/删除自己的克隆音色，内置音色所有人可用
+10. **管理员**：通过 ADMIN_PHONES 环境变量配置，管理员可查看平台统计
+11. **数据存储**：用户和音色数据存储在 SQLite（data.db），旧 custom_voices.json 在首次启动时自动迁移

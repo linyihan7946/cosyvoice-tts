@@ -17,16 +17,170 @@
       padding: 20px;
     }
 
-    .container {
+    /* ===== 登录页面 ===== */
+    .login-container {
+      display: none;
       background: #fff;
       border-radius: 20px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
       padding: 40px;
       width: 100%;
-      max-width: 780px;
+      max-width: 420px;
+    }
+    .login-container.show { display: block; }
+
+    .login-header { text-align: center; margin-bottom: 32px; }
+    .login-header h1 { font-size: 24px; color: #1a1a2e; margin-bottom: 8px; }
+    .login-header p { color: #888; font-size: 14px; }
+
+    .login-form .form-group { margin-bottom: 20px; }
+    .login-form label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
     }
 
-    .header { text-align: center; margin-bottom: 32px; }
+    .phone-input-row {
+      display: flex;
+      gap: 10px;
+    }
+    .phone-input-row input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid #e8e8e8;
+      border-radius: 10px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+      font-family: inherit;
+    }
+    .phone-input-row input:focus { outline: none; border-color: #667eea; }
+
+    .send-code-btn {
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.2s;
+    }
+    .send-code-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .login-form input[type="text"] {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e8e8e8;
+      border-radius: 10px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+      font-family: inherit;
+      letter-spacing: 4px;
+      text-align: center;
+    }
+    .login-form input[type="text"]:focus { outline: none; border-color: #667eea; }
+
+    .login-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      margin-top: 8px;
+    }
+    .login-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(102, 126, 234, 0.35);
+    }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .login-error {
+      margin-top: 16px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      color: #cf1322;
+      display: none;
+    }
+    .login-error.show { display: block; }
+
+    /* ===== 主界面容器 ===== */
+    .main-container {
+      display: none;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+      padding: 0;
+      width: 100%;
+      max-width: 780px;
+      overflow: hidden;
+    }
+    .main-container.show { display: block; }
+
+    /* ===== 用户状态栏 ===== */
+    .user-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 28px;
+      background: #f8f9fa;
+      border-bottom: 1px solid #eee;
+    }
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #333;
+    }
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .user-phone { color: #888; font-size: 12px; }
+    .admin-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #fff3e0;
+      color: #e65100;
+      font-weight: 600;
+    }
+    .logout-btn {
+      padding: 6px 16px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .logout-btn:hover { background: #f5f5f5; border-color: #ccc; color: #333; }
+
+    /* ===== 内容区 ===== */
+    .content-area { padding: 32px 40px 40px; }
+
+    .header { text-align: center; margin-bottom: 28px; }
     .header h1 { font-size: 28px; color: #1a1a2e; margin-bottom: 8px; }
     .header p { color: #666; font-size: 14px; }
 
@@ -350,6 +504,43 @@
     }
     .download-btn:hover { background: #e0e0e0; }
 
+    /* 管理员统计面板 */
+    .admin-stats {
+      margin-top: 24px;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 12px;
+      display: none;
+    }
+    .admin-stats.show { display: block; }
+    .admin-stats h4 {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 14px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .stat-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      border: 1px solid #e8e8e8;
+    }
+    .stat-card .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #667eea;
+    }
+    .stat-card .stat-label {
+      font-size: 12px;
+      color: #888;
+      margin-top: 4px;
+    }
+
     /* 错误/提示 */
     .error-msg, .success-msg {
       margin-top: 16px;
@@ -367,123 +558,413 @@
     .char-count { text-align: right; font-size: 12px; color: #888; margin-top: 6px; }
 
     @media (max-width: 480px) {
-      .container { padding: 24px; }
+      .content-area { padding: 20px; }
+      .user-bar { padding: 10px 16px; }
       .header h1 { font-size: 22px; }
       .voice-grid { grid-template-columns: repeat(2, 1fr); }
       .clone-form-row { flex-direction: column; }
+      .login-container { padding: 28px; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🎙️ Qwen3-TTS 语音合成</h1>
-      <p>输入文案，选择音色，一键生成高质量语音</p>
+  <!-- ===== 登录界面 ===== -->
+  <div class="login-container show" id="loginContainer">
+    <div class="login-header">
+      <h1>🎙️ Qwen3-TTS</h1>
+      <p>手机号验证登录，开始语音合成</p>
     </div>
-
-    <!-- Tab 切换 -->
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('tts')">语音合成</button>
-      <button class="tab-btn" onclick="switchTab('clone')">音色克隆</button>
-    </div>
-
-    <!-- 语音合成 Tab -->
-    <div id="tab-tts" class="tab-content active">
+    <div class="login-form">
       <div class="form-group">
-        <label> 文案内容</label>
-        <textarea id="textInput" placeholder="请输入要转换为语音的文案内容...&#10;&#10;支持中文、英文等多种语言，最长支持 2000 字。"></textarea>
-        <div class="char-count"><span id="charCount">0</span> / 2000</div>
-      </div>
-
-      <div class="form-group">
-        <label>🎤 选择音色</label>
-        <div class="voice-grid" id="voiceGrid"></div>
-      </div>
-
-      <button class="generate-btn" id="generateBtn" onclick="generateAudio()">
-        <div class="spinner"></div>
-        <span class="btn-text">🔊 生成语音</span>
-        <span class="btn-loading-text">正在生成中...</span>
-      </button>
-
-      <div class="error-msg" id="errorMsg"></div>
-
-      <div class="result-section" id="resultSection">
-        <div class="result-label"> 生成结果</div>
-        <div class="audio-player-wrapper">
-          <audio id="audioPlayer" controls></audio>
-          <button class="download-btn" onclick="downloadAudio()">⬇️ 下载音频</button>
+        <label>📱 手机号</label>
+        <div class="phone-input-row">
+          <input type="text" id="phoneInput" placeholder="请输入手机号" maxlength="11" autocomplete="tel">
+          <button class="send-code-btn" id="sendCodeBtn" onclick="sendCode()">获取验证码</button>
         </div>
+      </div>
+      <div class="form-group">
+        <label>🔐 验证码</label>
+        <input type="text" id="codeInput" placeholder="请输入6位验证码" maxlength="6" autocomplete="one-time-code">
+      </div>
+      <button class="login-btn" id="loginBtn" onclick="login()">登 录</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
+  </div>
+
+  <!-- ===== 主界面 ===== -->
+  <div class="main-container" id="mainContainer">
+    <!-- 用户状态栏 -->
+    <div class="user-bar">
+      <div class="user-info">
+        <div class="user-avatar" id="userAvatar">用</div>
+        <div>
+          <span id="userNickname">用户</span>
+          <span class="admin-badge" id="adminBadge" style="display:none">管理员</span>
+        </div>
+        <span class="user-phone" id="userPhone"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="adminStatsLink" style="display:none;font-size:12px;color:#667eea;cursor:pointer;" onclick="toggleAdminStats()">📊 平台统计</span>
+        <button class="logout-btn" onclick="logout()">退出登录</button>
       </div>
     </div>
 
-    <!-- 音色克隆 Tab -->
-    <div id="tab-clone" class="tab-content">
-      <div class="clone-section">
-        <h3> 克隆你的声音</h3>
-        <p class="subtitle">上传一段 15~20 秒的语音，即可克隆出你的专属音色</p>
+    <!-- 内容区 -->
+    <div class="content-area">
+      <div class="header">
+        <h1>🎙️ Qwen3-TTS 语音合成</h1>
+        <p>输入文案，选择音色，一键生成高质量语音</p>
+      </div>
 
-        <div class="upload-area" id="uploadArea" onclick="document.getElementById('audioFile').click()">
-          <div class="icon"></div>
-          <div class="text">点击或拖拽上传音频文件</div>
-          <div class="file-info" id="fileInfo"></div>
-          <input type="file" id="audioFile" accept="audio/wav,audio/mp3,audio/mpeg,audio/mp4,audio/wav" onchange="handleFileSelect(event)">
+      <!-- Tab 切换 -->
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('tts')">语音合成</button>
+        <button class="tab-btn" onclick="switchTab('clone')">音色克隆</button>
+      </div>
+
+      <!-- 语音合成 Tab -->
+      <div id="tab-tts" class="tab-content active">
+        <div class="form-group">
+          <label>📝 文案内容</label>
+          <textarea id="textInput" placeholder="请输入要转换为语音的文案内容...&#10;&#10;支持中文、英文等多种语言，最长支持 2000 字。"></textarea>
+          <div class="char-count"><span id="charCount">0</span> / 2000</div>
         </div>
 
-        <div class="clone-form-row">
-          <div class="form-group">
-            <label>音色名称</label>
-            <input type="text" id="voiceName" placeholder="英文名，如 myvoice" maxlength="16">
-          </div>
-          <div class="form-group">
-            <label>音频语种</label>
-            <select id="voiceLanguage">
-              <option value="zh">中文</option>
-              <option value="en">英文</option>
-              <option value="ja">日文</option>
-              <option value="ko">韩文</option>
-              <option value="fr">法文</option>
-              <option value="de">德文</option>
-            </select>
-          </div>
+        <div class="form-group">
+          <label>🎤 选择音色</label>
+          <div class="voice-grid" id="voiceGrid"></div>
         </div>
 
-        <button class="clone-btn" id="cloneBtn" onclick="cloneVoice()">
+        <button class="generate-btn" id="generateBtn" onclick="generateAudio()">
           <div class="spinner"></div>
-          <span class="btn-text">🎤 开始克隆</span>
-          <span class="btn-loading-text">正在克隆中，请稍候...</span>
+          <span class="btn-text">🔊 生成语音</span>
+          <span class="btn-loading-text">正在生成中...</span>
         </button>
 
-        <div class="error-msg" id="cloneError"></div>
-        <div class="success-msg" id="cloneSuccess"></div>
+        <div class="error-msg" id="errorMsg"></div>
+
+        <div class="result-section" id="resultSection">
+          <div class="result-label">🎧 生成结果</div>
+          <div class="audio-player-wrapper">
+            <audio id="audioPlayer" controls></audio>
+            <button class="download-btn" onclick="downloadAudio()">⬇️ 下载音频</button>
+          </div>
+        </div>
       </div>
 
-      <!-- 已克隆的音色列表 -->
-      <div class="custom-voices-section">
-        <h4>📋 我的音色</h4>
-        <div id="customVoicesList">
-          <div class="empty-hint">暂无克隆音色，上传音频开始克隆吧</div>
+      <!-- 音色克隆 Tab -->
+      <div id="tab-clone" class="tab-content">
+        <div class="clone-section">
+          <h3>🎤 克隆你的声音</h3>
+          <p class="subtitle">上传一段 15~20 秒的语音，即可克隆出你的专属音色</p>
+
+          <div class="upload-area" id="uploadArea" onclick="document.getElementById('audioFile').click()">
+            <div class="icon">📁</div>
+            <div class="text">点击或拖拽上传音频文件</div>
+            <div class="file-info" id="fileInfo"></div>
+            <input type="file" id="audioFile" accept="audio/wav,audio/mp3,audio/mpeg,audio/mp4,audio/wav" onchange="handleFileSelect(event)">
+          </div>
+
+          <div class="clone-form-row">
+            <div class="form-group">
+              <label>音色名称</label>
+              <input type="text" id="voiceName" placeholder="英文名，如 myvoice" maxlength="16">
+            </div>
+            <div class="form-group">
+              <label>音频语种</label>
+              <select id="voiceLanguage">
+                <option value="zh">中文</option>
+                <option value="en">英文</option>
+                <option value="ja">日文</option>
+                <option value="ko">韩文</option>
+                <option value="fr">法文</option>
+                <option value="de">德文</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="clone-btn" id="cloneBtn" onclick="cloneVoice()">
+            <div class="spinner"></div>
+            <span class="btn-text">🎤 开始克隆</span>
+            <span class="btn-loading-text">正在克隆中，请稍候...</span>
+          </button>
+
+          <div class="error-msg" id="cloneError"></div>
+          <div class="success-msg" id="cloneSuccess"></div>
+        </div>
+
+        <!-- 已克隆的音色列表 -->
+        <div class="custom-voices-section">
+          <h4>📋 我的音色</h4>
+          <div id="customVoicesList">
+            <div class="empty-hint">暂无克隆音色，上传音频开始克隆吧</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 管理员统计面板 -->
+      <div class="admin-stats" id="adminStats">
+        <h4>📊 平台统计</h4>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="statUsers">-</div>
+            <div class="stat-label">总用户数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statActive">-</div>
+            <div class="stat-label">今日活跃</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statVoices">-</div>
+            <div class="stat-label">克隆音色数</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
+    // ===== 全局状态 =====
+    let currentUser = null;
     let voices = [];
     let selectedVoice = '';
     let audioBlob = null;
     let uploadedAudioBase64 = null;
 
+    // ===== 认证工具 =====
+    function getToken() {
+      return localStorage.getItem('token');
+    }
+
+    function setToken(token) {
+      localStorage.setItem('token', token);
+    }
+
+    function clearToken() {
+      localStorage.removeItem('token');
+    }
+
+    // 封装 fetch，自动携带 JWT token
+    async function authFetch(url, options = {}) {
+      const token = getToken();
+      const headers = { ...(options.headers || {}) };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, { ...options, headers });
+
+      // 401 时自动跳转登录页
+      if (response.status === 401) {
+        clearToken();
+        showLoginPage();
+        throw new Error('登录已过期，请重新登录');
+      }
+
+      return response;
+    }
+
+    // ===== 登录逻辑 =====
+    let sendCodeTimer = null;
+
+    function showLoginPage() {
+      document.getElementById('loginContainer').classList.add('show');
+      document.getElementById('mainContainer').classList.remove('show');
+      currentUser = null;
+    }
+
+    function showMainPage() {
+      document.getElementById('loginContainer').classList.remove('show');
+      document.getElementById('mainContainer').classList.add('show');
+    }
+
+    async function sendCode() {
+      const phone = document.getElementById('phoneInput').value.trim();
+      const btn = document.getElementById('sendCodeBtn');
+      const loginError = document.getElementById('loginError');
+
+      loginError.classList.remove('show');
+
+      if (!/^1\d{10}$/.test(phone)) {
+        loginError.textContent = '❌ 请输入正确的手机号';
+        loginError.classList.add('show');
+        return;
+      }
+
+      btn.disabled = true;
+
+      try {
+        const response = await fetch('api/auth/send-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || '发送失败');
+        }
+
+        // 开发环境提示 debug_code
+        if (data.debug_code) {
+          console.log(`[DEV] 验证码: ${data.debug_code}`);
+          loginError.textContent = `💡 开发模式 - 验证码: ${data.debug_code}`;
+          loginError.style.background = '#f6ffed';
+          loginError.style.border = '1px solid #b7eb8f';
+          loginError.style.color = '#389e0d';
+          loginError.classList.add('show');
+        }
+
+        // 60 秒倒计时
+        let countdown = 60;
+        btn.textContent = `${countdown}s 后重发`;
+        sendCodeTimer = setInterval(() => {
+          countdown--;
+          btn.textContent = `${countdown}s 后重发`;
+          if (countdown <= 0) {
+            clearInterval(sendCodeTimer);
+            btn.textContent = '获取验证码';
+            btn.disabled = false;
+          }
+        }, 1000);
+      } catch (error) {
+        loginError.textContent = '❌ ' + (error.message || '发送失败，请稍后重试');
+        loginError.style.background = '#fff2f0';
+        loginError.style.border = '1px solid #ffccc7';
+        loginError.style.color = '#cf1322';
+        loginError.classList.add('show');
+        btn.disabled = false;
+      }
+    }
+
+    async function login() {
+      const phone = document.getElementById('phoneInput').value.trim();
+      const code = document.getElementById('codeInput').value.trim();
+      const btn = document.getElementById('loginBtn');
+      const loginError = document.getElementById('loginError');
+
+      loginError.classList.remove('show');
+
+      if (!phone || !code) {
+        loginError.textContent = '❌ 请输入手机号和验证码';
+        loginError.style.background = '#fff2f0';
+        loginError.style.border = '1px solid #ffccc7';
+        loginError.style.color = '#cf1322';
+        loginError.classList.add('show');
+        return;
+      }
+
+      if (code.length !== 6) {
+        loginError.textContent = '❌ 请输入6位验证码';
+        loginError.style.background = '#fff2f0';
+        loginError.style.border = '1px solid #ffccc7';
+        loginError.style.color = '#cf1322';
+        loginError.classList.add('show');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '登录中...';
+
+      try {
+        const response = await fetch('api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, code }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || '登录失败');
+        }
+
+        setToken(data.token);
+        currentUser = data.user;
+        showMainPage();
+        updateUserBar();
+        await initApp();
+      } catch (error) {
+        loginError.textContent = '❌ ' + (error.message || '登录失败，请稍后重试');
+        loginError.style.background = '#fff2f0';
+        loginError.style.border = '1px solid #ffccc7';
+        loginError.style.color = '#cf1322';
+        loginError.classList.add('show');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '登 录';
+      }
+    }
+
+    function logout() {
+      if (confirm('确定要退出登录吗？')) {
+        clearToken();
+        currentUser = null;
+        voices = [];
+        selectedVoice = '';
+        audioBlob = null;
+        showLoginPage();
+        // 重置登录表单
+        document.getElementById('phoneInput').value = '';
+        document.getElementById('codeInput').value = '';
+        document.getElementById('loginError').classList.remove('show');
+        document.getElementById('loginError').style.background = '#fff2f0';
+        document.getElementById('loginError').style.border = '1px solid #ffccc7';
+        document.getElementById('loginError').style.color = '#cf1322';
+        document.getElementById('sendCodeBtn').textContent = '获取验证码';
+        document.getElementById('sendCodeBtn').disabled = false;
+        if (sendCodeTimer) clearInterval(sendCodeTimer);
+      }
+    }
+
+    function updateUserBar() {
+      if (!currentUser) return;
+      document.getElementById('userAvatar').textContent = (currentUser.nickname || '用').charAt(0);
+      document.getElementById('userNickname').textContent = currentUser.nickname || '用户';
+      document.getElementById('userPhone').textContent = currentUser.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+
+      if (currentUser.is_admin) {
+        document.getElementById('adminBadge').style.display = 'inline';
+        document.getElementById('adminStatsLink').style.display = 'inline';
+      } else {
+        document.getElementById('adminBadge').style.display = 'none';
+        document.getElementById('adminStatsLink').style.display = 'none';
+      }
+    }
+
+    // ===== 管理员统计 =====
+    async function toggleAdminStats() {
+      const panel = document.getElementById('adminStats');
+      if (panel.classList.contains('show')) {
+        panel.classList.remove('show');
+        return;
+      }
+
+      try {
+        const response = await authFetch('api/auth/admin/stats');
+        if (!response.ok) throw new Error('获取失败');
+        const stats = await response.json();
+        document.getElementById('statUsers').textContent = stats.totalUsers;
+        document.getElementById('statActive').textContent = stats.todayActiveUsers;
+        document.getElementById('statVoices').textContent = stats.totalCustomVoices;
+        panel.classList.add('show');
+      } catch (e) {
+        console.error('获取统计失败:', e);
+      }
+    }
+
     // ===== Tab 切换 =====
     function switchTab(tab) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+      const btn = document.querySelector(`[onclick="switchTab('${tab}')"]`);
+      if (btn) btn.classList.add('active');
       document.getElementById('tab-' + tab).classList.add('active');
     }
 
-    // ===== 初始化 =====
-    async function init() {
+    // ===== 应用初始化 =====
+    async function initApp() {
       await loadVoices();
       renderVoiceGrid();
       renderCustomVoicesList();
@@ -491,7 +972,7 @@
 
     async function loadVoices() {
       try {
-        const res = await fetch('api/voices');
+        const res = await authFetch('api/voices');
         const data = await res.json();
         voices = data.voices;
       } catch (e) {
@@ -503,7 +984,7 @@
     function renderVoiceGrid() {
       const grid = document.getElementById('voiceGrid');
       grid.innerHTML = voices.map((v, i) => `
-        <div class="voice-card ${v.type === 'custom' ? 'custom' : ''} ${i === 0 ? 'active' : ''}"
+        <div class="voice-card ${v.type === 'custom' ? 'custom' : ''} ${(selectedVoice && selectedVoice === v.id) || (!selectedVoice && i === 0) ? 'active' : ''}"
              data-voice="${v.id}"
              onclick="selectVoice('${v.id}', this)">
           <span class="voice-type">${v.type === 'custom' ? '我的' : '内置'}</span>
@@ -512,7 +993,7 @@
         </div>
       `).join('');
 
-      if (voices.length > 0) {
+      if (voices.length > 0 && !selectedVoice) {
         selectedVoice = voices[0].id;
       }
     }
@@ -548,6 +1029,14 @@
     // ===== 字数统计 =====
     document.getElementById('textInput').addEventListener('input', function () {
       document.getElementById('charCount').textContent = this.value.length;
+    });
+
+    // ===== 登录回车键 =====
+    document.getElementById('codeInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') login();
+    });
+    document.getElementById('phoneInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') sendCode();
     });
 
     // ===== 文件上传 =====
@@ -640,7 +1129,7 @@
       btn.disabled = true;
 
       try {
-        const response = await fetch('api/voice-clone', {
+        const response = await authFetch('api/voice-clone', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -682,7 +1171,7 @@
       if (!confirm(`确定要删除音色 "${voiceName}" 吗？`)) return;
 
       try {
-        const response = await fetch(`api/voice-clone/${encodeURIComponent(voiceId)}`, {
+        const response = await authFetch(`api/voice-clone/${encodeURIComponent(voiceId)}`, {
           method: 'DELETE',
         });
 
@@ -717,7 +1206,7 @@
       btn.disabled = true;
 
       try {
-        const response = await fetch('api/tts', {
+        const response = await authFetch('api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, voice: selectedVoice }),
@@ -779,8 +1268,30 @@
       document.getElementById('cloneSuccess').classList.remove('show');
     }
 
-    // 启动
-    init();
+    // ===== 启动 =====
+    (function boot() {
+      const token = getToken();
+      if (token) {
+        // 尝试用已有 token 获取用户信息
+        authFetch('api/auth/me')
+          .then(res => {
+            if (!res.ok) throw new Error('token invalid');
+            return res.json();
+          })
+          .then(user => {
+            currentUser = user;
+            showMainPage();
+            updateUserBar();
+            return initApp();
+          })
+          .catch(() => {
+            clearToken();
+            showLoginPage();
+          });
+      } else {
+        showLoginPage();
+      }
+    })();
   </script>
 </body>
 </html>

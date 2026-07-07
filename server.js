@@ -2,6 +2,7 @@ const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // 读取 .env 文件（简单的实现，不需要额外依赖）
 const envPath = path.join(__dirname, '.env');
@@ -12,6 +13,24 @@ if (fs.existsSync(envPath)) {
     if (match) process.env[match[1]] = match[2].trim();
   });
 }
+
+// 认证模块
+const { createToken, authMiddleware, optionalAuth } = require('./auth');
+
+// 数据库模块
+const {
+  getUserByPhone,
+  getUserById,
+  createUser,
+  setUserAdmin,
+  getCustomVoicesByUserId,
+  getCustomVoiceById,
+  addCustomVoice,
+  deleteCustomVoice,
+  getAllCustomVoices,
+  getStats,
+  migrateFromJson,
+} = require('./db');
 
 const app = express();
 const PORT = 3000;
@@ -46,7 +65,25 @@ const API_CONFIG = {
   voiceCloneModel: 'qwen-voice-enrollment',
 };
 
-// 内置音色列表（qwen3-tts-flash 支持的音色）
+// 管理员手机号列表
+const ADMIN_PHONES = new Set(
+  (process.env.ADMIN_PHONES || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+);
+
+// 短信配置
+const SMS_CONFIG = {
+  accessKeyId: process.env.SMS_ACCESS_KEY_ID || '',
+  accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || '',
+  signature: process.env.SMS_SIGNATURE || '',
+  templateId: process.env.SMS_TEMPLATE_ID || '',
+};
+
+// ============================================================
+//  内置音色列表（qwen3-tts-flash 支持的音色）
+// ============================================================
 const BUILTIN_VOICES = [
   { id: 'Cherry', name: '芊悦', desc: '阳光积极女声', type: 'builtin' },
   { id: 'Ethan', name: '晨煦', desc: '标准普通话男声', type: 'builtin' },
@@ -67,28 +104,86 @@ const BUILTIN_VOICES = [
   { id: 'Eric', name: '程川', desc: '四川话男声', type: 'builtin' },
 ];
 
-// 自定义音色存储文件
-const CUSTOM_VOICES_FILE = path.join(__dirname, 'custom_voices.json');
+// ============================================================
+//  验证码存储（内存）
+// ============================================================
+const codeStore = new Map(); // phone -> { code, expiresAt }
 
-// 加载自定义音色
-function loadCustomVoices() {
-  try {
-    if (fs.existsSync(CUSTOM_VOICES_FILE)) {
-      const data = JSON.parse(fs.readFileSync(CUSTOM_VOICES_FILE, 'utf-8'));
-      return Array.isArray(data) ? data : [];
-    }
-  } catch (e) {
-    console.error('加载自定义音色失败:', e.message);
+const CODE_EXPIRE_MS = 5 * 60 * 1000; // 5 分钟过期
+
+function generateCode() {
+  // 6 位数字验证码，首位非零
+  const first = crypto.randomInt(1, 10).toString();
+  const rest = Array.from({ length: 5 }, () => crypto.randomInt(0, 10).toString()).join('');
+  return first + rest;
+}
+
+function storeCode(phone, code) {
+  codeStore.set(phone, { code, expiresAt: Date.now() + CODE_EXPIRE_MS });
+}
+
+function verifyAndConsumeCode(phone, code) {
+  const entry = codeStore.get(phone);
+  if (!entry) return false;
+  if (Date.now() > entry.expiresAt) {
+    codeStore.delete(phone);
+    return false;
   }
-  return [];
+  if (entry.code !== code) return false;
+  codeStore.delete(phone);
+  return true;
 }
 
-// 保存自定义音色
-function saveCustomVoices(voices) {
-  fs.writeFileSync(CUSTOM_VOICES_FILE, JSON.stringify(voices, null, 2), 'utf-8');
+// 定期清理过期验证码
+setInterval(() => {
+  const now = Date.now();
+  for (const [phone, entry] of codeStore) {
+    if (now > entry.expiresAt) codeStore.delete(phone);
+  }
+}, 60 * 1000);
+
+// ============================================================
+//  短信发送（UniSMS）
+// ============================================================
+async function sendSms(phone, code) {
+  if (!SMS_CONFIG.accessKeyId) {
+    console.log('[SMS] 未配置 SMS_ACCESS_KEY_ID，跳过短信发送');
+    return false;
+  }
+
+  try {
+    const response = await fetch('https://uni.apistd.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SMS_CONFIG.accessKeyId}`,
+      },
+      body: JSON.stringify({
+        to: phone,
+        signature: SMS_CONFIG.signature,
+        templateId: SMS_CONFIG.templateId,
+        templateData: { code },
+      }),
+    });
+
+    const result = await response.json();
+    if (response.ok && result.status === 'success') {
+      console.log(`[SMS] 验证码已发送到 ${phone}`);
+      return true;
+    }
+    console.warn('[SMS] 发送失败:', JSON.stringify(result));
+    return false;
+  } catch (e) {
+    console.warn('[SMS] 发送异常:', e.message);
+    return false;
+  }
 }
 
-let customVoices = loadCustomVoices();
+// ============================================================
+//  数据迁移：从 custom_voices.json 迁移到 SQLite
+// ============================================================
+const CUSTOM_VOICES_JSON = path.join(__dirname, 'custom_voices.json');
+migrateFromJson(CUSTOM_VOICES_JSON);
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -109,11 +204,104 @@ if (PUBLIC_BASE_PATH) {
 }
 
 // ============================================================
-//  API 接口
+//  Auth API 接口
 // ============================================================
 
-// 获取音色列表（内置 + 自定义）
-app.get(routePath('/api/voices'), (req, res) => {
+// 发送验证码
+app.post(routePath('/api/auth/send-code'), async (req, res) => {
+  const { phone } = req.body;
+
+  if (!phone || !/^1\d{10}$/.test(phone)) {
+    return res.status(400).json({ error: '请输入正确的手机号' });
+  }
+
+  const code = generateCode();
+  storeCode(phone, code);
+
+  // 尝试发送短信（失败不阻塞）
+  sendSms(phone, code);
+
+  console.log(`[Auth] 验证码 for ${phone}: ${code}`);
+
+  res.json({
+    message: '验证码已发送',
+    debug_code: code,
+  });
+});
+
+// 登录
+app.post(routePath('/api/auth/login'), async (req, res) => {
+  const { phone, code } = req.body;
+
+  if (!phone || !code) {
+    return res.status(400).json({ error: '请提供手机号和验证码' });
+  }
+
+  if (!verifyAndConsumeCode(phone, code)) {
+    return res.status(400).json({ error: '验证码错误或已过期' });
+  }
+
+  // 查找或创建用户
+  let user = getUserByPhone(phone);
+  if (!user) {
+    const nickname = `用户${phone.slice(-4)}`;
+    user = createUser(phone, nickname);
+    console.log(`[Auth] 新用户注册: ${phone} (${user.id})`);
+  }
+
+  // 检查是否为管理员
+  if (ADMIN_PHONES.has(phone) && !user.is_admin) {
+    setUserAdmin(user.id, true);
+    user.is_admin = 1;
+  }
+
+  const token = createToken(user.id);
+
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      phone: user.phone,
+      nickname: user.nickname,
+      is_admin: !!user.is_admin,
+    },
+  });
+});
+
+// 获取当前用户信息
+app.get(routePath('/api/auth/me'), authMiddleware, (req, res) => {
+  const user = getUserById(req.userId);
+  if (!user) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+  res.json({
+    id: user.id,
+    phone: user.phone,
+    nickname: user.nickname,
+    is_admin: !!user.is_admin,
+  });
+});
+
+// 管理员统计
+app.get(routePath('/api/auth/admin/stats'), authMiddleware, (req, res) => {
+  const user = getUserById(req.userId);
+  if (!user || !user.is_admin) {
+    return res.status(403).json({ error: '无权访问' });
+  }
+  res.json(getStats());
+});
+
+// ============================================================
+//  API 接口（受保护）
+// ============================================================
+
+// 获取音色列表（内置 + 当前用户的自定义音色）
+app.get(routePath('/api/voices'), optionalAuth, (req, res) => {
+  let customVoices = [];
+  if (req.userId) {
+    customVoices = getCustomVoicesByUserId(req.userId);
+  }
+
   const allVoices = [
     ...BUILTIN_VOICES,
     ...customVoices.map(v => ({ ...v, type: 'custom' })),
@@ -122,11 +310,19 @@ app.get(routePath('/api/voices'), (req, res) => {
 });
 
 // 语音合成接口
-app.post(routePath('/api/tts'), async (req, res) => {
+app.post(routePath('/api/tts'), authMiddleware, async (req, res) => {
   const { text, voice } = req.body;
 
   if (!text || !voice) {
     return res.status(400).json({ error: '请提供文本和音色' });
+  }
+
+  // 检查克隆音色所有权
+  if (voice.startsWith('qwen-tts-vc-')) {
+    const customVoice = getCustomVoiceById(voice);
+    if (!customVoice || customVoice.user_id !== req.userId) {
+      return res.status(403).json({ error: '无权使用此音色' });
+    }
   }
 
   // 克隆音色必须以 "qwen-tts-vc-" 开头，需用 VC 模型合成
@@ -185,7 +381,7 @@ app.post(routePath('/api/tts'), async (req, res) => {
 // ============================================================
 
 // 创建克隆音色
-app.post(routePath('/api/voice-clone'), async (req, res) => {
+app.post(routePath('/api/voice-clone'), authMiddleware, async (req, res) => {
   const { audioBase64, voiceName, audioText, language } = req.body;
 
   if (!audioBase64 || !voiceName) {
@@ -197,8 +393,9 @@ app.post(routePath('/api/voice-clone'), async (req, res) => {
     return res.status(400).json({ error: '音色名称只能包含英文字母、数字、下划线，最长16字符' });
   }
 
-  // 检查重名
-  if (customVoices.find(v => v.id === voiceName)) {
+  // 检查重名（在当前用户的自定义音色中）
+  const userVoices = getCustomVoicesByUserId(req.userId);
+  if (userVoices.find(v => v.name === voiceName)) {
     return res.status(400).json({ error: `音色 "${voiceName}" 已存在，请换个名称` });
   }
 
@@ -235,17 +432,10 @@ app.post(routePath('/api/voice-clone'), async (req, res) => {
       return res.status(500).json({ error: '克隆成功但未返回音色 ID', detail: data });
     }
 
-    // 保存到自定义音色列表
-    const newVoice = {
-      id: clonedVoice,
-      name: voiceName,
-      desc: `自定义克隆音色`,
-      createdAt: new Date().toISOString(),
-    };
-    customVoices.push(newVoice);
-    saveCustomVoices(customVoices);
+    // 保存到数据库（关联当前用户）
+    const newVoice = addCustomVoice(clonedVoice, req.userId, voiceName, '自定义克隆音色');
 
-    console.log(`✅ 音色克隆成功: "${voiceName}" → voice ID: "${clonedVoice}"`);
+    console.log(`✅ 音色克隆成功: "${voiceName}" → voice ID: "${clonedVoice}" (user: ${req.userId})`);
     res.json({ success: true, voice: newVoice });
   } catch (error) {
     console.error('Voice Clone Error:', error);
@@ -254,12 +444,17 @@ app.post(routePath('/api/voice-clone'), async (req, res) => {
 });
 
 // 删除克隆音色
-app.delete(routePath('/api/voice-clone/:voiceId'), async (req, res) => {
+app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, res) => {
   const { voiceId } = req.params;
-  const voice = customVoices.find(v => v.id === voiceId);
+  const voice = getCustomVoiceById(voiceId);
 
   if (!voice) {
     return res.status(404).json({ error: '音色不存在' });
+  }
+
+  // 检查所有权
+  if (voice.user_id !== req.userId) {
+    return res.status(403).json({ error: '无权删除此音色' });
   }
 
   try {
@@ -285,9 +480,8 @@ app.delete(routePath('/api/voice-clone/:voiceId'), async (req, res) => {
       // 即使 API 删除失败，也从本地列表移除
     }
 
-    // 从本地列表移除
-    customVoices = customVoices.filter(v => v.id !== voiceId);
-    saveCustomVoices(customVoices);
+    // 从数据库移除
+    deleteCustomVoice(voiceId);
 
     console.log(`✅ 音色已删除: "${voice.name}" (${voiceId})`);
     res.json({ success: true });
@@ -301,9 +495,14 @@ app.delete(routePath('/api/voice-clone/:voiceId'), async (req, res) => {
 //  启动服务
 // ============================================================
 app.listen(PORT, () => {
+  const totalCustomVoices = getAllCustomVoices().length;
   console.log(`\n🎙️  Qwen3-TTS 语音合成服务已启动`);
   console.log(`  打开浏览器访问: http://localhost:${PORT}\n`);
   console.log(`  TTS 端点: DashScope multimodal-generation`);
   console.log(`  内置音色: ${BUILTIN_VOICES.length} 种`);
-  console.log(`  自定义音色: ${customVoices.length} 种\n`);
+  console.log(`  自定义音色: ${totalCustomVoices} 种`);
+  if (ADMIN_PHONES.size > 0) {
+    console.log(`  管理员手机号: ${[...ADMIN_PHONES].join(', ')}`);
+  }
+  console.log();
 });
