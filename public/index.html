@@ -504,20 +504,7 @@
     }
     .download-btn:hover { background: #e0e0e0; }
 
-    /* 管理员统计面板 */
-    .admin-stats {
-      margin-top: 24px;
-      padding: 20px;
-      background: #f8f9fa;
-      border-radius: 12px;
-      display: none;
-    }
-    .admin-stats.show { display: block; }
-    .admin-stats h4 {
-      font-size: 14px;
-      color: #333;
-      margin-bottom: 14px;
-    }
+    /* 统计面板 */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -604,7 +591,6 @@
         <span class="user-phone" id="userPhone"></span>
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
-        <span id="adminStatsLink" style="display:none;font-size:12px;color:#667eea;cursor:pointer;" onclick="toggleAdminStats()">📊 平台统计</span>
         <button class="logout-btn" onclick="logout()">退出登录</button>
       </div>
     </div>
@@ -620,6 +606,7 @@
       <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('tts')">语音合成</button>
         <button class="tab-btn" onclick="switchTab('clone')">音色克隆</button>
+        <button class="tab-btn" id="tabBtnStats" style="display:none" onclick="switchTab('stats')">📊 平台统计</button>
       </div>
 
       <!-- 语音合成 Tab -->
@@ -702,21 +689,20 @@
         </div>
       </div>
 
-      <!-- 管理员统计面板 -->
-      <div class="admin-stats" id="adminStats">
-        <h4>📊 平台统计</h4>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value" id="statUsers">-</div>
-            <div class="stat-label">总用户数</div>
+      <!-- 平台统计 Tab（仅管理员可见） -->
+      <div id="tab-stats" class="tab-content">
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+          <div class="stat-card" style="padding: 32px 20px;">
+            <div class="stat-value" id="statUsers" style="font-size: 36px;">-</div>
+            <div class="stat-label" style="font-size: 14px;">总用户数</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-value" id="statActive">-</div>
-            <div class="stat-label">今日活跃</div>
+          <div class="stat-card" style="padding: 32px 20px;">
+            <div class="stat-value" id="statActive" style="font-size: 36px;">-</div>
+            <div class="stat-label" style="font-size: 14px;">今日活跃</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-value" id="statVoices">-</div>
-            <div class="stat-label">克隆音色数</div>
+          <div class="stat-card" style="padding: 32px 20px;">
+            <div class="stat-value" id="statVoices" style="font-size: 36px;">-</div>
+            <div class="stat-label" style="font-size: 14px;">克隆音色数</div>
           </div>
         </div>
       </div>
@@ -937,21 +923,15 @@
 
       if (currentUser.is_admin) {
         document.getElementById('adminBadge').style.display = 'inline';
-        document.getElementById('adminStatsLink').style.display = 'inline';
+        document.getElementById('tabBtnStats').style.display = '';
       } else {
         document.getElementById('adminBadge').style.display = 'none';
-        document.getElementById('adminStatsLink').style.display = 'none';
+        document.getElementById('tabBtnStats').style.display = 'none';
       }
     }
 
     // ===== 管理员统计 =====
-    async function toggleAdminStats() {
-      const panel = document.getElementById('adminStats');
-      if (panel.classList.contains('show')) {
-        panel.classList.remove('show');
-        return;
-      }
-
+    async function loadAdminStats() {
       try {
         const response = await authFetch('api/auth/admin/stats');
         if (!response.ok) throw new Error('获取失败');
@@ -959,7 +939,6 @@
         document.getElementById('statUsers').textContent = stats.totalUsers;
         document.getElementById('statActive').textContent = stats.todayActiveUsers;
         document.getElementById('statVoices').textContent = stats.totalCustomVoices;
-        panel.classList.add('show');
       } catch (e) {
         console.error('获取统计失败:', e);
       }
@@ -972,6 +951,10 @@
       const btn = document.querySelector(`[onclick="switchTab('${tab}')"]`);
       if (btn) btn.classList.add('active');
       document.getElementById('tab-' + tab).classList.add('active');
+
+      if (tab === 'stats') {
+        loadAdminStats();
+      }
     }
 
     // ===== 应用初始化 =====
