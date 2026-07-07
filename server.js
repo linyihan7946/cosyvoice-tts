@@ -80,6 +80,7 @@ const SMS_CONFIG = {
   signature: process.env.SMS_SIGNATURE || '',
   templateId: process.env.SMS_TEMPLATE_ID || '',
 };
+const SHOULD_RETURN_DEBUG_CODE = process.env.SHOW_DEBUG_CODE === 'true' || process.env.NODE_ENV !== 'production';
 
 // ============================================================
 //  内置音色列表（qwen3-tts-flash 支持的音色）
@@ -144,38 +145,99 @@ setInterval(() => {
 
 // ============================================================
 //  短信发送（UniSMS）
+//  REST API: https://uni.apistd.com
+//  文档: https://unisms.apistd.com/docs
 // ============================================================
 async function sendSms(phone, code) {
   if (!SMS_CONFIG.accessKeyId) {
     console.log('[SMS] 未配置 SMS_ACCESS_KEY_ID，跳过短信发送');
-    return false;
+    return { sent: false, error: '未配置短信 AccessKey' };
+  }
+
+  if (!SMS_CONFIG.signature || !SMS_CONFIG.templateId) {
+    console.log('[SMS] 未配置短信签名或模板 ID，跳过短信发送');
+    return { sent: false, error: '未配置短信签名或模板 ID' };
   }
 
   try {
-    const response = await fetch('https://uni.apistd.com/v1/messages', {
+    // 与 ai-personal-trainer 中 UniSMS Python SDK 保持一致：
+    // 鉴权参数走 Query，短信内容参数走 JSON Body。
+    const params = new URLSearchParams();
+    params.append('action', 'sms.message.send');
+    params.append('accessKeyId', SMS_CONFIG.accessKeyId);
+
+    // 如果配置了 accessKeySecret，使用 HMAC-SHA256 签名模式
+    if (SMS_CONFIG.accessKeySecret) {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const nonce = crypto.randomBytes(8).toString('hex');
+
+      params.append('algorithm', 'hmac-sha256');
+      params.append('timestamp', timestamp);
+      params.append('nonce', nonce);
+
+      const signStr = [...params.entries()]
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+        .map(([key, value]) => `${key}=${value}`)
+        .join('&');
+      const signature = crypto
+        .createHmac('sha256', SMS_CONFIG.accessKeySecret)
+        .update(signStr)
+        .digest('hex');
+      params.append('signature', signature);
+    }
+
+    const url = `https://uni.apistd.com/?${params.toString()}`;
+    const body = {
+      to: phone,
+      signature: SMS_CONFIG.signature,
+      templateId: SMS_CONFIG.templateId,
+      templateData: { code },
+    };
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SMS_CONFIG.accessKeyId}`,
+        'User-Agent': 'uni-python-sdk/0.2.0',
+        'Content-Type': 'application/json;charset=utf-8',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        to: phone,
-        signature: SMS_CONFIG.signature,
-        templateId: SMS_CONFIG.templateId,
-        templateData: { code },
-      }),
+      body: JSON.stringify(body),
     });
 
-    const result = await response.json();
-    if (response.ok && result.status === 'success') {
+    const responseText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      result = { code: String(response.status), message: responseText || response.statusText };
+    }
+    console.log('[SMS] API 响应:', JSON.stringify(result));
+
+    const messageStatuses = Array.isArray(result.data && result.data.messages)
+      ? result.data.messages.map(message => message.status)
+      : [];
+    const smsAccepted =
+      result.code === '0' &&
+      (
+        result.message === 'Success' ||
+        (result.data && result.data.code === 'OK') ||
+        messageStatuses.some(status => ['sent', 'delivered', 'accepted'].includes(status))
+      );
+
+    if (response.ok && smsAccepted) {
       console.log(`[SMS] 验证码已发送到 ${phone}`);
-      return true;
+      return { sent: true };
     }
     console.warn('[SMS] 发送失败:', JSON.stringify(result));
-    return false;
+    return {
+      sent: false,
+      error: (result.data && (result.data.message || result.data.code)) ||
+        result.message ||
+        `短信服务返回异常 (${result.code || response.status})`,
+    };
   } catch (e) {
     console.warn('[SMS] 发送异常:', e.message);
-    return false;
+    return { sent: false, error: e.message };
   }
 }
 
@@ -209,7 +271,7 @@ if (PUBLIC_BASE_PATH) {
 
 // 发送验证码
 app.post(routePath('/api/auth/send-code'), async (req, res) => {
-  const { phone } = req.body;
+  const phone = String(req.body.phone || '').replace(/\D/g, '').slice(0, 11);
 
   if (!phone || !/^1\d{10}$/.test(phone)) {
     return res.status(400).json({ error: '请输入正确的手机号' });
@@ -219,19 +281,25 @@ app.post(routePath('/api/auth/send-code'), async (req, res) => {
   storeCode(phone, code);
 
   // 尝试发送短信（失败不阻塞）
-  sendSms(phone, code);
+  const smsResult = await sendSms(phone, code);
 
-  console.log(`[Auth] 验证码 for ${phone}: ${code}`);
+  console.log(`[Auth] 验证码 for ${phone}: ${code}${smsResult.sent ? ' (SMS已发送)' : ' (SMS未发送)'}`);
 
-  res.json({
-    message: '验证码已发送',
-    debug_code: code,
-  });
+  const payload = {
+    message: smsResult.sent ? '验证码已发送，请查收短信' : '验证码已生成',
+    sms_sent: smsResult.sent,
+  };
+
+  if (smsResult.error) payload.sms_error = smsResult.error;
+  if (SHOULD_RETURN_DEBUG_CODE || !smsResult.sent) payload.debug_code = code;
+
+  res.json(payload);
 });
 
 // 登录
 app.post(routePath('/api/auth/login'), async (req, res) => {
-  const { phone, code } = req.body;
+  const phone = String(req.body.phone || '').replace(/\D/g, '').slice(0, 11);
+  const { code } = req.body;
 
   if (!phone || !code) {
     return res.status(400).json({ error: '请提供手机号和验证码' });
@@ -496,7 +564,7 @@ app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, r
 // ============================================================
 app.listen(PORT, () => {
   const totalCustomVoices = getAllCustomVoices().length;
-  console.log(`\n🎙️  Qwen3-TTS 语音合成服务已启动`);
+  console.log(`\n🎙️  文字转语音助手服务已启动`);
   console.log(`  打开浏览器访问: http://localhost:${PORT}\n`);
   console.log(`  TTS 端点: DashScope multimodal-generation`);
   console.log(`  内置音色: ${BUILTIN_VOICES.length} 种`);

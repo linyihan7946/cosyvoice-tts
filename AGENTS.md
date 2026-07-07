@@ -1,4 +1,4 @@
-# agents.md — Qwen3-TTS 语音合成项目
+# agents.md — 文字转语音助手项目
 
 > 本文档记录项目架构和开发规范。**每次新功能开发或功能修改后，必须更新此文档。**
 
@@ -8,6 +8,8 @@
 
 基于阿里百炼 **qwen3-tts-flash** 模型的语音合成 Web 应用。
 将文本转换为高质量语音（WAV 格式，24000Hz），支持 17 种内置音色 + 自定义音色克隆。
+
+用户可见产品名：**文字转语音助手**。
 
 ### 核心功能
 
@@ -235,6 +237,7 @@ npm start          # 或 npm run dev
 | 2026-07-02 | 切换为 qwen3-tts-flash 模型，使用 multimodal-generation 端点；新增 17 种音色支持 |
 | 2026-07-03 | **新增音色克隆功能**：支持上传音频克隆专属音色；新增 /api/voice-clone 创建/删除接口；前端新增「音色克隆」Tab；自定义音色持久化存储到 custom_voices.json |
 | 2026-07-07 | **新增手机短信验证登录与账号管理**：引入 SQLite 数据库（better-sqlite3）；新增用户系统（users 表）；新增 JWT 认证（jsonwebtoken）；新增 /api/auth/send-code、/api/auth/login、/api/auth/me、/api/auth/admin/stats 接口；音色克隆数据从 JSON 迁移到 SQLite 并关联 user_id；音色按用户隔离（当前用户只看到自己的克隆音色）；前端新增登录页面 + 用户状态栏 + 管理员统计面板；支持 UniSMS 短信发送 |
+| 2026-07-07 | **优化短信验证码登录与产品命名**：UniSMS 发送按 ai-personal-trainer 项目中的 Python SDK 逻辑对齐（POST JSON、秒级 timestamp、8 字节 nonce、HMAC hex 签名），并兼容 UniSMS 实际返回的 message=Success/messages.status=sent 成功响应；服务端/前端统一清理手机号格式；调试环境返回验证码用于短信不可达兜底；页面和 README 用户可见标题改为「文字转语音助手」 |
 
 ---
 
@@ -251,3 +254,4 @@ npm start          # 或 npm run dev
 9. **音色隔离**：每个用户只能看到/使用/删除自己的克隆音色，内置音色所有人可用
 10. **管理员**：通过 ADMIN_PHONES 环境变量配置，管理员可查看平台统计
 11. **数据存储**：用户和音色数据存储在 SQLite（data.db），旧 custom_voices.json 在首次启动时自动迁移
+12. **短信发送**：UniSMS 逻辑需与 ai-personal-trainer 的 Python SDK 保持一致；鉴权参数放 URL Query，短信内容参数（to/signature/templateId/templateData）放 JSON Body；签名使用排序后的 Query + HMAC-SHA256 hex；发送成功需满足顶层 `code === "0"`，并兼容 `message === "Success"`、`data.code === "OK"` 或 `messages[].status === "sent"`；调试环境可返回 debug_code 作为验证码兜底

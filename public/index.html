@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Qwen3-TTS 语音合成</title>
+  <title>文字转语音助手</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -571,7 +571,7 @@
   <!-- ===== 登录界面 ===== -->
   <div class="login-container show" id="loginContainer">
     <div class="login-header">
-      <h1>🎙️ Qwen3-TTS</h1>
+      <h1>🎙️ 文字转语音助手</h1>
       <p>手机号验证登录，开始语音合成</p>
     </div>
     <div class="login-form">
@@ -612,7 +612,7 @@
     <!-- 内容区 -->
     <div class="content-area">
       <div class="header">
-        <h1>🎙️ Qwen3-TTS 语音合成</h1>
+        <h1>🎙️ 文字转语音助手</h1>
         <p>输入文案，选择音色，一键生成高质量语音</p>
       </div>
 
@@ -767,6 +767,26 @@
     // ===== 登录逻辑 =====
     let sendCodeTimer = null;
 
+    function normalizePhone(phone) {
+      return phone.replace(/\D/g, '').slice(0, 11);
+    }
+
+    function showLoginNotice(type, message) {
+      const loginError = document.getElementById('loginError');
+      const styles = {
+        success: ['#f6ffed', '1px solid #b7eb8f', '#389e0d'],
+        warning: ['#fff3e0', '1px solid #ffcc80', '#e65100'],
+        error: ['#fff2f0', '1px solid #ffccc7', '#cf1322'],
+      };
+      const [background, border, color] = styles[type] || styles.error;
+
+      loginError.textContent = message;
+      loginError.style.background = background;
+      loginError.style.border = border;
+      loginError.style.color = color;
+      loginError.classList.add('show');
+    }
+
     function showLoginPage() {
       document.getElementById('loginContainer').classList.add('show');
       document.getElementById('mainContainer').classList.remove('show');
@@ -779,15 +799,16 @@
     }
 
     async function sendCode() {
-      const phone = document.getElementById('phoneInput').value.trim();
+      const phoneInput = document.getElementById('phoneInput');
+      const phone = normalizePhone(phoneInput.value);
       const btn = document.getElementById('sendCodeBtn');
       const loginError = document.getElementById('loginError');
 
+      phoneInput.value = phone;
       loginError.classList.remove('show');
 
       if (!/^1\d{10}$/.test(phone)) {
-        loginError.textContent = '❌ 请输入正确的手机号';
-        loginError.classList.add('show');
+        showLoginNotice('error', '❌ 请输入正确的手机号');
         return;
       }
 
@@ -806,14 +827,18 @@
           throw new Error(data.error || '发送失败');
         }
 
-        // 开发环境提示 debug_code
+        // 调试码仅在服务端允许时返回；返回后用于短信不可达兜底。
         if (data.debug_code) {
           console.log(`[DEV] 验证码: ${data.debug_code}`);
-          loginError.textContent = `💡 开发模式 - 验证码: ${data.debug_code}`;
-          loginError.style.background = '#f6ffed';
-          loginError.style.border = '1px solid #b7eb8f';
-          loginError.style.color = '#389e0d';
-          loginError.classList.add('show');
+        }
+
+        if (data.sms_sent) {
+          showLoginNotice('success', '✅ 验证码已发送，请查收短信');
+        } else if (data.debug_code) {
+          const reason = data.sms_error ? `（${data.sms_error}）` : '';
+          showLoginNotice('warning', `💡 短信未发送${reason}，可直接使用验证码：${data.debug_code}`);
+        } else {
+          showLoginNotice('warning', '💡 验证码已生成，如果短信未收到，请稍后重试');
         }
 
         // 60 秒倒计时
@@ -829,38 +854,28 @@
           }
         }, 1000);
       } catch (error) {
-        loginError.textContent = '❌ ' + (error.message || '发送失败，请稍后重试');
-        loginError.style.background = '#fff2f0';
-        loginError.style.border = '1px solid #ffccc7';
-        loginError.style.color = '#cf1322';
-        loginError.classList.add('show');
+        showLoginNotice('error', '❌ ' + (error.message || '发送失败，请稍后重试'));
         btn.disabled = false;
       }
     }
 
     async function login() {
-      const phone = document.getElementById('phoneInput').value.trim();
+      const phoneInput = document.getElementById('phoneInput');
+      const phone = normalizePhone(phoneInput.value);
       const code = document.getElementById('codeInput').value.trim();
       const btn = document.getElementById('loginBtn');
       const loginError = document.getElementById('loginError');
 
+      phoneInput.value = phone;
       loginError.classList.remove('show');
 
       if (!phone || !code) {
-        loginError.textContent = '❌ 请输入手机号和验证码';
-        loginError.style.background = '#fff2f0';
-        loginError.style.border = '1px solid #ffccc7';
-        loginError.style.color = '#cf1322';
-        loginError.classList.add('show');
+        showLoginNotice('error', '❌ 请输入手机号和验证码');
         return;
       }
 
       if (code.length !== 6) {
-        loginError.textContent = '❌ 请输入6位验证码';
-        loginError.style.background = '#fff2f0';
-        loginError.style.border = '1px solid #ffccc7';
-        loginError.style.color = '#cf1322';
-        loginError.classList.add('show');
+        showLoginNotice('error', '❌ 请输入6位验证码');
         return;
       }
 
@@ -886,11 +901,7 @@
         updateUserBar();
         await initApp();
       } catch (error) {
-        loginError.textContent = '❌ ' + (error.message || '登录失败，请稍后重试');
-        loginError.style.background = '#fff2f0';
-        loginError.style.border = '1px solid #ffccc7';
-        loginError.style.color = '#cf1322';
-        loginError.classList.add('show');
+        showLoginNotice('error', '❌ ' + (error.message || '登录失败，请稍后重试'));
       } finally {
         btn.disabled = false;
         btn.textContent = '登 录';
