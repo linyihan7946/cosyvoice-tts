@@ -566,7 +566,15 @@
       cursor: pointer;
       transition: all 0.2s;
     }
-    .delete-btn:hover { background: #ffcdd2; }
+    .delete-btn:hover:not(:disabled) { background: #ffcdd2; }
+
+    /* 操作按钮组 */
+    .action-btns {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
 
     .empty-hint {
       text-align: center;
@@ -682,14 +690,124 @@
     /* 字数统计 */
     .char-count { text-align: right; font-size: 12px; color: #888; margin-top: 6px; }
 
-    @media (max-width: 480px) {
-      .content-area { padding: 0 20px 20px; }
-      .header-area { padding: 20px 20px 0; }
-      .user-bar { padding: 10px 16px; }
-      .header h1 { font-size: 22px; }
-      .voice-grid { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 768px) {
+      body { padding: 0; }
+
+      .main-container {
+        height: 100vh;
+        border-radius: 0;
+        max-width: 100%;
+      }
+
+      .content-area { padding: 0 16px 16px; }
+      .header-area { padding: 16px 16px 0; }
+      .user-bar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
+      .header { margin-bottom: 16px; }
+      .header h1 { font-size: 20px; }
+      .header p { font-size: 13px; }
+
+      /* Tab 栏适配 */
+      .tabs { gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .tab-btn { padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+
+      /* 管理员子标签 */
+      .admin-sub-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        gap: 6px;
+        padding-bottom: 4px;
+      }
+      .admin-sub-tab { padding: 6px 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
+
+      /* 登录页 */
+      .login-container { padding: 24px; border-radius: 16px; max-width: 100%; }
+
+      /* 音色网格 */
+      .voice-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .voice-card { padding: 10px; }
+
+      /* 克隆表单 */
       .clone-form-row { flex-direction: column; }
-      .login-container { padding: 28px; }
+      .clone-section { padding: 16px; border-radius: 12px; }
+
+      /* 用户管理表格 → 卡片式布局 */
+      .user-tier-table thead { display: none; }
+      .user-tier-table tbody { display: block; }
+      .user-tier-table tr {
+        display: block;
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
+        border: 1px solid #e8e8e8;
+      }
+      .user-tier-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #eee;
+        font-size: 13px;
+      }
+      .user-tier-table td:last-child { border-bottom: none; }
+      .user-tier-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #555;
+        font-size: 12px;
+        margin-right: 10px;
+        flex-shrink: 0;
+      }
+      .user-tier-table td[data-label="操作"] { justify-content: flex-end; }
+      .user-tier-table td[data-label="操作"]::before { display: none; }
+      .user-tier-table select, .user-tier-table input[type="date"] {
+        font-size: 13px;
+        padding: 6px 8px;
+      }
+
+      /* 配额表格 */
+      .quota-table th, .quota-table td { padding: 8px 6px; font-size: 12px; }
+      .quota-table input { width: 60px; }
+
+      /* 用量记录表格 */
+      #admin-usage table thead { display: none; }
+      #admin-usage table tbody tr {
+        display: block;
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 12px;
+        margin-bottom: 10px;
+        border: 1px solid #e8e8e8;
+      }
+      #admin-usage table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #eee;
+        font-size: 13px;
+      }
+      #admin-usage table td:last-child { border-bottom: none; }
+      #admin-usage table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #555;
+        font-size: 12px;
+      }
+
+      /* 统计面板 */
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+
+      /* 配额信息条 */
+      .quota-bar { gap: 8px; font-size: 12px; padding: 8px 12px; }
+    }
+
+    @media (max-width: 380px) {
+      .voice-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .login-container { padding: 20px; }
+      .header h1 { font-size: 18px; }
     }
   </style>
 </head>
@@ -1308,23 +1426,30 @@
     function renderUserTiers(users) {
       const tbody = document.getElementById('userTierBody');
       const tierLabels = { free: '普通用户', monthly: '月会员', admin: '管理员' };
+      const currentUserId = currentUser?.id;
 
       tbody.innerHTML = users.map(u => {
         const tier = u.is_admin ? 'admin' : (u.tier || 'free');
+        const isSelf = u.user_id === currentUserId;
         return `<tr>
-          <td>${u.phone}</td>
-          <td>${u.nickname}</td>
-          <td>
-            <select id="ut-tier-${u.user_id}">
+          <td data-label="手机号">${u.phone}${isSelf ? ' <span style="color:#999;font-size:11px;">(我)</span>' : ''}</td>
+          <td data-label="昵称">${u.nickname}</td>
+          <td data-label="层级">
+            <select id="ut-tier-${u.user_id}" ${isSelf ? 'disabled' : ''}>
               <option value="free" ${tier === 'free' ? 'selected' : ''}>普通用户</option>
               <option value="monthly" ${tier === 'monthly' ? 'selected' : ''}>月会员</option>
               <option value="admin" ${tier === 'admin' ? 'selected' : ''}>管理员</option>
             </select>
           </td>
-          <td><input type="date" id="ut-exp-${u.user_id}" value="${u.expires_at || ''}"></td>
-          <td>${u.voice_clone_count}</td>
-          <td>${u.todayTtsUsed}</td>
-          <td><button class="save-btn" onclick="saveUserTier('${u.user_id}')">保存</button></td>
+          <td data-label="到期时间"><input type="date" id="ut-exp-${u.user_id}" value="${u.expires_at || ''}" ${isSelf ? 'disabled' : ''}></td>
+          <td data-label="克隆数">${u.voice_clone_count}</td>
+          <td data-label="今日TTS">${u.todayTtsUsed}</td>
+          <td data-label="操作">
+            <div class="action-btns">
+              <button class="save-btn" onclick="saveUserTier('${u.user_id}')" ${isSelf ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>保存</button>
+              <button class="delete-btn" onclick="deleteUser('${u.user_id}', '${u.phone}')" ${isSelf ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>删除</button>
+            </div>
+          </td>
         </tr>`;
       }).join('');
     }
@@ -1343,6 +1468,23 @@
         alert('✅ 用户层级已更新');
       } catch (e) {
         alert('❌ 保存失败: ' + e.message);
+      }
+    }
+
+    async function deleteUser(userId, phone) {
+      if (!confirm(`确定要删除用户 ${phone} 吗？\n\n该操作将同时删除：\n• 用户账号\n• 所有克隆音色\n• 用量记录\n\n此操作不可撤销！`)) {
+        return;
+      }
+      try {
+        const response = await authFetch(`api/auth/admin/users/${userId}`, { method: 'DELETE' });
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || '删除失败');
+        }
+        alert('✅ 用户已删除');
+        loadUserTiers(); // 刷新列表
+      } catch (e) {
+        alert('❌ 删除失败: ' + e.message);
       }
     }
 
@@ -1365,9 +1507,9 @@
         return;
       }
       tbody.innerHTML = records.map(r => `<tr>
-        <td>${r.phone}</td>
-        <td>${r.nickname}</td>
-        <td>${r.ttsCount}</td>
+        <td data-label="手机号">${r.phone}</td>
+        <td data-label="昵称">${r.nickname}</td>
+        <td data-label="TTS 次数">${r.ttsCount}</td>
       </tr>`).join('');
     }
 

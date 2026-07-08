@@ -27,6 +27,7 @@ const {
   getUserById,
   createUser,
   setUserAdmin,
+  deleteUser,
   getCustomVoicesByUserId,
   getCustomVoiceById,
   addCustomVoice,
@@ -593,6 +594,26 @@ app.put(routePath('/api/auth/admin/user-tiers'), authMiddleware, (req, res) => {
   if (tier === 'admin') setUserAdmin(userId, true);
 
   console.log(`[Admin] 用户层级已更新: ${targetUser.phone} → ${tier}${expiresAt ? ` (到期: ${expiresAt})` : ''}`);
+  res.json({ success: true });
+});
+
+// 删除用户
+app.delete(routePath('/api/auth/admin/users/:userId'), authMiddleware, (req, res) => {
+  const user = getUserById(req.userId);
+  if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
+
+  const { userId } = req.params;
+
+  // 不能删除自己
+  if (userId === req.userId) {
+    return res.status(400).json({ error: '不能删除自己的账号' });
+  }
+
+  const targetUser = getUserById(userId);
+  if (!targetUser) return res.status(404).json({ error: '目标用户不存在' });
+
+  deleteUser(userId);
+  console.log(`[Admin] 用户已删除: ${targetUser.phone} (${userId})`);
   res.json({ success: true });
 });
 

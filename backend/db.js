@@ -109,6 +109,17 @@ function setUserAdmin(userId, isAdmin) {
   getDb().prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(isAdmin ? 1 : 0, userId);
 }
 
+function deleteUser(userId) {
+  const db = getDb();
+  const deleteUserTx = db.transaction(() => {
+    db.prepare('DELETE FROM custom_voices WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM user_tiers WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM usage_tracking WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  });
+  deleteUserTx();
+}
+
 // ===== 音色操作 =====
 
 function getCustomVoicesByUserId(userId) {
@@ -276,6 +287,7 @@ module.exports = {
   getUserById,
   createUser,
   setUserAdmin,
+  deleteUser,
   getCustomVoicesByUserId,
   getCustomVoiceById,
   addCustomVoice,
