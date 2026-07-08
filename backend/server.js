@@ -3,6 +3,10 @@ const fetch = require('node-fetch');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
 
 // 读取 .env 文件（简单的实现，不需要额外依赖）
 const envPath = path.join(__dirname, '.env');
@@ -92,6 +96,7 @@ const SMS_CONFIG = {
   templateId: process.env.SMS_TEMPLATE_ID || '',
 };
 const SHOULD_RETURN_DEBUG_CODE = process.env.SHOW_DEBUG_CODE === 'true' || process.env.NODE_ENV !== 'production';
+const SMS_SDK_SCRIPT = path.join(__dirname, 'send_sms_unisdk.py');
 
 // ============================================================
 //  配额检查中间件
@@ -212,19 +217,61 @@ function verifyAndConsumeCode(phone, code) {
 }
 
 // 定期清理过期验证码
-setInterval(() => {
+const codeCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [phone, entry] of codeStore) {
     if (now > entry.expiresAt) codeStore.delete(phone);
   }
 }, 60 * 1000);
+if (typeof codeCleanupTimer.unref === 'function') codeCleanupTimer.unref();
 
 // ============================================================
 //  短信发送（UniSMS）
 //  REST API: https://uni.apistd.com
 //  文档: https://unisms.apistd.com/docs
 // ============================================================
+async function sendSmsWithPythonSdk(phone, code) {
+  try {
+    const { stdout } = await execFileAsync(
+      process.env.PYTHON_BIN || 'python',
+      [SMS_SDK_SCRIPT, phone, code],
+      {
+        env: process.env,
+        timeout: 20000,
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
+      }
+    );
+    const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
+    const payload = JSON.parse(lines[lines.length - 1] || '{}');
+
+    if (payload.sent) {
+      console.log('[SMS] Python SDK 响应:', JSON.stringify(payload));
+      return { sent: true, sdkAvailable: true };
+    }
+
+    if (payload.sdk_available === false) {
+      console.warn('[SMS] Python SDK 不可用，回退 REST:', payload.error);
+      return { sent: false, sdkAvailable: false, error: payload.error };
+    }
+
+    console.warn('[SMS] Python SDK 发送失败:', JSON.stringify(payload));
+    return {
+      sent: false,
+      sdkAvailable: true,
+      error: payload.error || payload.message || payload.code || 'Python SDK 发送失败',
+    };
+  } catch (e) {
+    console.warn('[SMS] Python SDK 调用异常，回退 REST:', e.message);
+    return { sent: false, sdkAvailable: false, error: e.message };
+  }
+}
+
 async function sendSms(phone, code) {
+  if (process.env.NODE_ENV === 'test') {
+    return { sent: false, error: '测试环境跳过短信发送' };
+  }
+
   if (!SMS_CONFIG.accessKeyId) {
     console.log('[SMS] 未配置 SMS_ACCESS_KEY_ID，跳过短信发送');
     return { sent: false, error: '未配置短信 AccessKey' };
@@ -234,6 +281,10 @@ async function sendSms(phone, code) {
     console.log('[SMS] 未配置短信签名或模板 ID，跳过短信发送');
     return { sent: false, error: '未配置短信签名或模板 ID' };
   }
+
+  const sdkResult = await sendSmsWithPythonSdk(phone, code);
+  if (sdkResult.sent) return sdkResult;
+  if (sdkResult.sdkAvailable) return sdkResult;
 
   try {
     // 与 ai-personal-trainer 中 UniSMS Python SDK 保持一致：

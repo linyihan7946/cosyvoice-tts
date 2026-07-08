@@ -1048,8 +1048,7 @@
         }
 
         if (data.sms_sent) {
-          const fallbackText = data.debug_code ? `；收不到可使用本地验证码：${data.debug_code}` : '';
-          showLoginNotice('success', `✅ 验证码已发送，请查收短信${fallbackText}`);
+          showLoginNotice('success', '✅ 验证码已发送，请查收短信');
         } else if (data.debug_code) {
           const reason = data.sms_error ? `（${data.sms_error}）` : '';
           showLoginNotice('warning', `💡 短信未发送${reason}，可直接使用验证码：${data.debug_code}`);

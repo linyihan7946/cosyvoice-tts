@@ -44,6 +44,7 @@ cosyvoice-tts/
 │   ├── server.js          # Express 后端服务
 │   ├── db.js              # SQLite 数据库层
 │   ├── auth.js            # JWT 认证模块
+│   ├── send_sms_unisdk.py # UniSMS Python SDK 桥接脚本
 │   ├── .env               # API Key 配置（禁止提交）
 │   ├── package.json       # 后端依赖
 │   ├── data.db            # SQLite 数据库（运行时）
@@ -350,6 +351,7 @@ npm run test:coverage # 查看覆盖率
 | 2026-07-08 | **前后端目录分离**：后端代码（server.js, db.js, auth.js, .env, package.json, data.db）迁移到 `backend/` 目录；前端代码（index.html）迁移到 `frontend/` 目录；服务启动方式改为 `cd backend && npm start` |
 | 2026-07-08 | **新增完整单元测试**：引入 Jest + supertest 测试框架；新增 `__tests__/db.test.js`（数据库层测试，覆盖用户/音色/配额/用量等 18 个函数）、`__tests__/auth.test.js`（认证模块测试，覆盖 token 创建/验证/中间件）、`__tests__/api.test.js`（API 接口集成测试，覆盖 14 个接口）；修改 db.js 添加 `resetDb()` 支持测试隔离；server.js 添加 `module.exports` 支持 supertest；共 66 个测试用例，全部通过 |
 | 2026-07-08 | **优化短信不可达兜底体验**：当 UniSMS 返回发送成功但用户未收到短信时，前端成功提示会在调试环境显示 `debug_code` 作为本地验证码兜底，避免运营商延迟或拦截导致无法登录 |
+| 2026-07-08 | **短信发送改为优先使用 UniSMS Python SDK**：新增 `backend/send_sms_unisdk.py`，后端 `sendSms()` 优先调用与 ai-personal-trainer 相同的 Python SDK 发送短信；仅当 SDK 不可用时才回退 REST API |
 
 ---
 
@@ -370,3 +372,4 @@ npm run test:coverage # 查看覆盖率
 13. **配额系统**：配额参数存储在 `quota_config` 表中（非 .env），支持运行时通过管理 API 动态修改无需重启；`-1` 表示无限；每日用量以 `date('now')` 为键，无需 cron 清理；管理员层级兼容 `ADMIN_PHONES` 环境变量（优先级最高）
 14. **短信兜底体验**：前端在 `sms_sent: true` 且响应包含 `debug_code` 时，可在成功提示中显示本地验证码；生产环境应设置 `NODE_ENV=production` 或关闭 `SHOW_DEBUG_CODE`，避免暴露验证码
 15. **重启服务**：每次修改后端代码（server.js, db.js, auth.js 等）后，必须先停掉旧服务（`taskkill /F /IM node.exe` 或关闭终端），再重启新服务（`cd backend && npm start`），否则修改不会生效
+16. **Python SDK 依赖**：短信发送优先调用 `backend/send_sms_unisdk.py`，运行环境需要可用的 `python` 命令和 `unisms`/`uni-sdk` Python 包；若 SDK 不可用，后端会自动回退 REST API；`NODE_ENV=test` 时会跳过真实短信发送
