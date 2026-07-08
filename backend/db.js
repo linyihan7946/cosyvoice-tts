@@ -37,6 +37,37 @@ function initTables() {
 
     CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
     CREATE INDEX IF NOT EXISTS idx_custom_voices_user_id ON custom_voices(user_id);
+
+    CREATE TABLE IF NOT EXISTS quota_config (
+      tier TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (tier, key)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_tiers (
+      user_id TEXT PRIMARY KEY,
+      tier TEXT NOT NULL DEFAULT 'free',
+      expires_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS usage_tracking (
+      user_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      tts_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, date),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('free', 'max_voice_clones', '1');
+    INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('free', 'daily_tts_limit', '10');
+    INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('monthly', 'max_voice_clones', '5');
+    INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('monthly', 'daily_tts_limit', '100');
+    INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('admin', 'max_voice_clones', '100');
+    INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('admin', 'daily_tts_limit', '-1');
   `);
 }
 
@@ -104,6 +135,92 @@ function getStats() {
   return { totalUsers, todayActiveUsers: todayActive, totalCustomVoices: totalVoices };
 }
 
+// ===== 配额配置 =====
+
+function getQuotaConfig(tier) {
+  const rows = getDb().prepare('SELECT key, value FROM quota_config WHERE tier = ?').all(tier);
+  const config = {};
+  for (const row of rows) {
+    config[row.key] = Number(row.value);
+  }
+  return config;
+}
+
+function setQuotaConfig(tier, key, value) {
+  getDb().prepare(
+    "INSERT OR REPLACE INTO quota_config (tier, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))"
+  ).run(tier, key, String(value));
+}
+
+function getAllQuotaConfig() {
+  const rows = getDb().prepare('SELECT * FROM quota_config').all();
+  const result = {};
+  for (const row of rows) {
+    if (!result[row.tier]) result[row.tier] = {};
+    result[row.tier][row.key] = Number(row.value);
+  }
+  return result;
+}
+
+// ===== 用户层级 =====
+
+function getUserTier(userId) {
+  const row = getDb().prepare('SELECT tier, expires_at FROM user_tiers WHERE user_id = ?').get(userId);
+  return row ? { tier: row.tier, expiresAt: row.expires_at } : { tier: 'free', expiresAt: null };
+}
+
+function setUserTier(userId, tier, expiresAt) {
+  getDb().prepare(
+    "INSERT OR REPLACE INTO user_tiers (user_id, tier, expires_at, updated_at) VALUES (?, ?, ?, datetime('now'))"
+  ).run(userId, tier, expiresAt || null);
+}
+
+function getAllUserTiers() {
+  return getDb().prepare(`
+    SELECT u.id as user_id, u.phone, u.nickname, u.is_admin,
+           COALESCE(ut.tier, 'free') as tier, ut.expires_at,
+           (SELECT COUNT(*) FROM custom_voices WHERE user_id = u.id) as voice_clone_count
+    FROM users u
+    LEFT JOIN user_tiers ut ON u.id = ut.user_id
+    ORDER BY u.created_at DESC
+  `).all();
+}
+
+// ===== 用量追踪 =====
+
+function getTodayUsage(userId) {
+  const row = getDb().prepare(
+    "SELECT tts_count FROM usage_tracking WHERE user_id = ? AND date = date('now')"
+  ).get(userId);
+  return row ? row.tts_count : 0;
+}
+
+function incrementTtsUsage(userId) {
+  getDb().prepare(`
+    INSERT INTO usage_tracking (user_id, date, tts_count)
+    VALUES (?, date('now'), 1)
+    ON CONFLICT(user_id, date) DO UPDATE SET tts_count = tts_count + 1
+  `).run(userId);
+}
+
+function getUsageByDate(userId, date) {
+  const row = getDb().prepare(
+    'SELECT tts_count FROM usage_tracking WHERE user_id = ? AND date = ?'
+  ).get(userId, date);
+  return row ? row.tts_count : 0;
+}
+
+function getAllUsageByDate(date) {
+  return getDb().prepare(`
+    SELECT u.id as user_id, u.phone, u.nickname,
+           COALESCE(ut.tts_count, 0) as tts_count
+    FROM users u
+    LEFT JOIN usage_tracking ut ON u.id = ut.user_id AND ut.date = ?
+    WHERE COALESCE(ut.tts_count, 0) > 0
+    ORDER BY tts_count DESC
+  `).all(date);
+}
+
 // ===== 数据迁移 =====
 
 function migrateFromJson(jsonPath) {
@@ -153,4 +270,17 @@ module.exports = {
   getAllCustomVoices,
   getStats,
   migrateFromJson,
+  // 配额配置
+  getQuotaConfig,
+  setQuotaConfig,
+  getAllQuotaConfig,
+  // 用户层级
+  getUserTier,
+  setUserTier,
+  getAllUserTiers,
+  // 用量追踪
+  getTodayUsage,
+  incrementTtsUsage,
+  getUsageByDate,
+  getAllUsageByDate,
 };

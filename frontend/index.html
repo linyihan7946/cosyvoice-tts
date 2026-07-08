@@ -171,6 +171,127 @@
       color: #e65100;
       font-weight: 600;
     }
+    .tier-badge {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .tier-badge.free { background: #e8f5e9; color: #2e7d32; }
+    .tier-badge.monthly { background: #e3f2fd; color: #1565c0; }
+    .tier-badge.admin { background: #fff3e0; color: #e65100; }
+
+    /* 配额信息条 */
+    .quota-bar {
+      display: flex;
+      gap: 16px;
+      padding: 10px 16px;
+      background: #f0f4ff;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: #333;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .quota-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .quota-progress {
+      width: 80px;
+      height: 6px;
+      background: #ddd;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .quota-progress-fill {
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .quota-progress-fill.warning { background: linear-gradient(135deg, #f5af19 0%, #f12711 100%); }
+    .quota-progress-fill.danger { background: linear-gradient(135deg, #eb3941 0%, #f15e5e 100%); }
+    .quota-limit-text { color: #888; font-size: 12px; }
+
+    /* 管理员配额管理 */
+    .admin-sub-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .admin-sub-tab {
+      padding: 8px 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .admin-sub-tab.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border-color: transparent;
+    }
+    .quota-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .quota-table th, .quota-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    .quota-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #555;
+      font-size: 12px;
+    }
+    .quota-table input {
+      width: 80px;
+      padding: 4px 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
+    }
+    .quota-table input:focus { outline: none; border-color: #667eea; }
+    .quota-table .tier-label {
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .quota-table .tier-label.free { background: #e8f5e9; color: #2e7d32; }
+    .quota-table .tier-label.monthly { background: #e3f2fd; color: #1565c0; }
+    .quota-table .tier-label.admin { background: #fff3e0; color: #e65100; }
+    .quota-table .save-btn {
+      padding: 4px 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .quota-table .save-btn:hover { opacity: 0.9; }
+    .user-tier-table select {
+      padding: 4px 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .user-tier-table input[type="date"] {
+      padding: 4px 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
     .logout-btn {
       padding: 6px 16px;
       background: #fff;
@@ -604,6 +725,7 @@
         <div class="user-avatar" id="userAvatar">用</div>
         <div>
           <span id="userNickname">用户</span>
+          <span class="tier-badge free" id="tierBadge" style="display:none">普通用户</span>
           <span class="admin-badge" id="adminBadge" style="display:none">管理员</span>
         </div>
         <span class="user-phone" id="userPhone"></span>
@@ -632,6 +754,17 @@
     <div class="content-area">
       <!-- 语音合成 Tab -->
       <div id="tab-tts" class="tab-content active">
+        <!-- 配额信息条 -->
+        <div class="quota-bar" id="ttsQuotaBar" style="display:none">
+          <div class="quota-item">
+            <span>📊 今日用量</span>
+            <div class="quota-progress">
+              <div class="quota-progress-fill" id="ttsQuotaFill" style="width:0%"></div>
+            </div>
+            <span id="ttsQuotaText" class="quota-limit-text">0/0 次</span>
+          </div>
+        </div>
+
         <div class="form-group">
           <label>📝 文案内容</label>
           <textarea id="textInput" placeholder="请输入要转换为语音的文案内容...&#10;&#10;支持中文、英文等多种语言，最长支持 2000 字。"></textarea>
@@ -662,6 +795,17 @@
 
       <!-- 音色克隆 Tab -->
       <div id="tab-clone" class="tab-content">
+        <!-- 克隆配额信息 -->
+        <div class="quota-bar" id="cloneQuotaBar" style="display:none">
+          <div class="quota-item">
+            <span>🎤 克隆配额</span>
+            <div class="quota-progress">
+              <div class="quota-progress-fill" id="cloneQuotaFill" style="width:0%"></div>
+            </div>
+            <span id="cloneQuotaText" class="quota-limit-text">0/0 个</span>
+          </div>
+        </div>
+
         <div class="clone-section">
           <h3>🎤 克隆你的声音</h3>
           <p class="subtitle">上传一段 15~20 秒的语音，即可克隆出你的专属音色</p>
@@ -712,19 +856,82 @@
 
       <!-- 平台统计 Tab（仅管理员可见） -->
       <div id="tab-stats" class="tab-content">
-        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
-          <div class="stat-card" style="padding: 32px 20px;">
-            <div class="stat-value" id="statUsers" style="font-size: 36px;">-</div>
-            <div class="stat-label" style="font-size: 14px;">总用户数</div>
+        <!-- 管理员子标签 -->
+        <div class="admin-sub-tabs">
+          <div class="admin-sub-tab active" onclick="switchAdminTab('overview')">📊 概览</div>
+          <div class="admin-sub-tab" onclick="switchAdminTab('quota-config')">⚙️ 配额设置</div>
+          <div class="admin-sub-tab" onclick="switchAdminTab('user-manage')">👥 用户管理</div>
+          <div class="admin-sub-tab" onclick="switchAdminTab('usage')">📈 用量记录</div>
+        </div>
+
+        <!-- 概览面板 -->
+        <div id="admin-overview" class="admin-sub-content">
+          <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+            <div class="stat-card" style="padding: 32px 20px;">
+              <div class="stat-value" id="statUsers" style="font-size: 36px;">-</div>
+              <div class="stat-label" style="font-size: 14px;">总用户数</div>
+            </div>
+            <div class="stat-card" style="padding: 32px 20px;">
+              <div class="stat-value" id="statActive" style="font-size: 36px;">-</div>
+              <div class="stat-label" style="font-size: 14px;">今日活跃</div>
+            </div>
+            <div class="stat-card" style="padding: 32px 20px;">
+              <div class="stat-value" id="statVoices" style="font-size: 36px;">-</div>
+              <div class="stat-label" style="font-size: 14px;">克隆音色数</div>
+            </div>
           </div>
-          <div class="stat-card" style="padding: 32px 20px;">
-            <div class="stat-value" id="statActive" style="font-size: 36px;">-</div>
-            <div class="stat-label" style="font-size: 14px;">今日活跃</div>
+        </div>
+
+        <!-- 配额设置面板 -->
+        <div id="admin-quota-config" class="admin-sub-content" style="display:none">
+          <table class="quota-table" id="quotaConfigTable">
+            <thead>
+              <tr>
+                <th>层级</th>
+                <th>音色克隆上限</th>
+                <th>每日 TTS 次数</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="quotaConfigBody"></tbody>
+          </table>
+        </div>
+
+        <!-- 用户管理面板 -->
+        <div id="admin-user-manage" class="admin-sub-content" style="display:none">
+          <table class="quota-table user-tier-table">
+            <thead>
+              <tr>
+                <th>手机号</th>
+                <th>昵称</th>
+                <th>层级</th>
+                <th>到期时间</th>
+                <th>克隆数</th>
+                <th>今日TTS</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="userTierBody"></tbody>
+          </table>
+        </div>
+
+        <!-- 用量记录面板 -->
+        <div id="admin-usage" class="admin-sub-content" style="display:none">
+          <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center;">
+            <label style="font-size: 13px; color: #555;">日期：</label>
+            <input type="date" id="usageDateInput" style="padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+            <button class="save-btn" onclick="loadUsageRecords()" style="padding: 6px 16px;">查询</button>
           </div>
-          <div class="stat-card" style="padding: 32px 20px;">
-            <div class="stat-value" id="statVoices" style="font-size: 36px;">-</div>
-            <div class="stat-label" style="font-size: 14px;">克隆音色数</div>
-          </div>
+          <table class="quota-table">
+            <thead>
+              <tr>
+                <th>手机号</th>
+                <th>昵称</th>
+                <th>TTS 次数</th>
+              </tr>
+            </thead>
+            <tbody id="usageBody"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -737,6 +944,7 @@
     let selectedVoice = '';
     let audioBlob = null;
     let uploadedAudioBase64 = null;
+    let quotaData = null;
 
     // ===== 认证工具 =====
     function getToken() {
@@ -942,11 +1150,24 @@
       document.getElementById('userNickname').textContent = currentUser.nickname || '用户';
       document.getElementById('userPhone').textContent = currentUser.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
 
-      if (currentUser.is_admin) {
+      // 层级标签
+      const tierBadge = document.getElementById('tierBadge');
+      const tierLabels = { free: '普通用户', monthly: '月会员', admin: '管理员' };
+      const tier = currentUser.tier || 'free';
+
+      if (tier === 'admin') {
+        tierBadge.style.display = 'none';
         document.getElementById('adminBadge').style.display = 'inline';
-        document.getElementById('tabBtnStats').style.display = '';
       } else {
         document.getElementById('adminBadge').style.display = 'none';
+        tierBadge.className = `tier-badge ${tier}`;
+        tierBadge.textContent = tierLabels[tier] || '普通用户';
+        tierBadge.style.display = 'inline';
+      }
+
+      if (currentUser.is_admin) {
+        document.getElementById('tabBtnStats').style.display = '';
+      } else {
         document.getElementById('tabBtnStats').style.display = 'none';
       }
     }
@@ -965,6 +1186,191 @@
       }
     }
 
+    // ===== 配额信息 =====
+    async function loadQuota() {
+      try {
+        const response = await authFetch('api/quota');
+        if (!response.ok) throw new Error('获取配额失败');
+        quotaData = await response.json();
+        updateQuotaDisplay();
+      } catch (e) {
+        console.error('加载配额失败:', e);
+      }
+    }
+
+    function updateQuotaDisplay() {
+      if (!quotaData) return;
+
+      // TTS 配额条
+      const ttsBar = document.getElementById('ttsQuotaBar');
+      const ttsFill = document.getElementById('ttsQuotaFill');
+      const ttsText = document.getElementById('ttsQuotaText');
+      const { used, limit } = quotaData.dailyTts;
+
+      ttsBar.style.display = 'flex';
+      if (limit === -1) {
+        ttsText.textContent = `已生成 ${used} 次（无限）`;
+        ttsFill.style.width = '0%';
+      } else {
+        const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+        ttsText.textContent = `${used}/${limit} 次`;
+        ttsFill.style.width = `${pct}%`;
+        ttsFill.className = 'quota-progress-fill' + (pct >= 90 ? ' danger' : pct >= 70 ? ' warning' : '');
+      }
+
+      // 克隆配额条
+      const cloneBar = document.getElementById('cloneQuotaBar');
+      const cloneFill = document.getElementById('cloneQuotaFill');
+      const cloneText = document.getElementById('cloneQuotaText');
+      const { current, limit: cloneLimit } = quotaData.voiceClones;
+
+      cloneBar.style.display = 'flex';
+      if (cloneLimit > 0) {
+        const pct = Math.min((current / cloneLimit) * 100, 100);
+        cloneText.textContent = `${current}/${cloneLimit} 个`;
+        cloneFill.style.width = `${pct}%`;
+        cloneFill.className = 'quota-progress-fill' + (pct >= 90 ? ' danger' : pct >= 70 ? ' warning' : '');
+      } else {
+        cloneText.textContent = `${current} 个`;
+      }
+
+      // 更新 currentUser tier
+      if (quotaData.tier) {
+        currentUser.tier = quotaData.tier;
+        updateUserBar();
+      }
+    }
+
+    // ===== 管理员配额管理 =====
+    async function loadQuotaConfig() {
+      try {
+        const response = await authFetch('api/auth/admin/quota-config');
+        if (!response.ok) throw new Error('获取失败');
+        const config = await response.json();
+        renderQuotaConfig(config);
+      } catch (e) {
+        console.error('加载配额配置失败:', e);
+      }
+    }
+
+    function renderQuotaConfig(config) {
+      const tbody = document.getElementById('quotaConfigBody');
+      const tierLabels = { free: '普通用户', monthly: '月会员', admin: '管理员' };
+      const tiers = ['free', 'monthly', 'admin'];
+
+      tbody.innerHTML = tiers.map(tier => {
+        const c = config[tier] || {};
+        return `<tr>
+          <td><span class="tier-label ${tier}">${tierLabels[tier]}</span></td>
+          <td><input type="number" min="0" id="qc-clones-${tier}" value="${c.max_voice_clones || 0}"></td>
+          <td><input type="number" min="-1" id="qc-tts-${tier}" value="${c.daily_tts_limit || 0}"><span style="font-size:11px;color:#999;margin-left:4px;">(-1=无限)</span></td>
+          <td><button class="save-btn" onclick="saveQuotaConfig('${tier}')">保存</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function saveQuotaConfig(tier) {
+      const clones = document.getElementById(`qc-clones-${tier}`).value;
+      const tts = document.getElementById(`qc-tts-${tier}`).value;
+
+      try {
+        let r1 = await authFetch('api/auth/admin/quota-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tier, key: 'max_voice_clones', value: clones }),
+        });
+        if (!r1.ok) throw new Error('保存克隆配额失败');
+
+        let r2 = await authFetch('api/auth/admin/quota-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tier, key: 'daily_tts_limit', value: tts }),
+        });
+        if (!r2.ok) throw new Error('保存 TTS 配额失败');
+
+        alert(`✅ ${tier} 层级配额已更新`);
+      } catch (e) {
+        alert('❌ 保存失败: ' + e.message);
+      }
+    }
+
+    async function loadUserTiers() {
+      try {
+        const response = await authFetch('api/auth/admin/user-tiers');
+        if (!response.ok) throw new Error('获取失败');
+        const users = await response.json();
+        renderUserTiers(users);
+      } catch (e) {
+        console.error('加载用户层级失败:', e);
+      }
+    }
+
+    function renderUserTiers(users) {
+      const tbody = document.getElementById('userTierBody');
+      const tierLabels = { free: '普通用户', monthly: '月会员', admin: '管理员' };
+
+      tbody.innerHTML = users.map(u => {
+        const tier = u.is_admin ? 'admin' : (u.tier || 'free');
+        return `<tr>
+          <td>${u.phone}</td>
+          <td>${u.nickname}</td>
+          <td>
+            <select id="ut-tier-${u.user_id}">
+              <option value="free" ${tier === 'free' ? 'selected' : ''}>普通用户</option>
+              <option value="monthly" ${tier === 'monthly' ? 'selected' : ''}>月会员</option>
+              <option value="admin" ${tier === 'admin' ? 'selected' : ''}>管理员</option>
+            </select>
+          </td>
+          <td><input type="date" id="ut-exp-${u.user_id}" value="${u.expires_at || ''}"></td>
+          <td>${u.voice_clone_count}</td>
+          <td>${u.todayTtsUsed}</td>
+          <td><button class="save-btn" onclick="saveUserTier('${u.user_id}')">保存</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function saveUserTier(userId) {
+      const tier = document.getElementById(`ut-tier-${userId}`).value;
+      const expiresAt = document.getElementById(`ut-exp-${userId}`).value || null;
+
+      try {
+        const response = await authFetch('api/auth/admin/user-tiers', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, tier, expiresAt }),
+        });
+        if (!response.ok) throw new Error('保存失败');
+        alert('✅ 用户层级已更新');
+      } catch (e) {
+        alert('❌ 保存失败: ' + e.message);
+      }
+    }
+
+    async function loadUsageRecords() {
+      const date = document.getElementById('usageDateInput').value || new Date().toISOString().slice(0, 10);
+      try {
+        const response = await authFetch(`api/auth/admin/usage?date=${date}`);
+        if (!response.ok) throw new Error('获取失败');
+        const records = await response.json();
+        renderUsageRecords(records);
+      } catch (e) {
+        console.error('加载用量记录失败:', e);
+      }
+    }
+
+    function renderUsageRecords(records) {
+      const tbody = document.getElementById('usageBody');
+      if (records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:20px;">该日期无用量记录</td></tr>';
+        return;
+      }
+      tbody.innerHTML = records.map(r => `<tr>
+        <td>${r.phone}</td>
+        <td>${r.nickname}</td>
+        <td>${r.ttsCount}</td>
+      </tr>`).join('');
+    }
+
     // ===== Tab 切换 =====
     function switchTab(tab) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -975,12 +1381,30 @@
 
       if (tab === 'stats') {
         loadAdminStats();
+        switchAdminTab('overview');
+      }
+    }
+
+    // ===== 管理员子标签切换 =====
+    function switchAdminTab(subTab) {
+      document.querySelectorAll('.admin-sub-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.admin-sub-content').forEach(c => c.style.display = 'none');
+      const tabs = { overview: 0, 'quota-config': 1, 'user-manage': 2, usage: 3 };
+      const allTabs = document.querySelectorAll('.admin-sub-tab');
+      if (allTabs[tabs[subTab]]) allTabs[tabs[subTab]].classList.add('active');
+      document.getElementById('admin-' + subTab).style.display = '';
+
+      if (subTab === 'quota-config') loadQuotaConfig();
+      if (subTab === 'user-manage') loadUserTiers();
+      if (subTab === 'usage') {
+        document.getElementById('usageDateInput').value = new Date().toISOString().slice(0, 10);
+        loadUsageRecords();
       }
     }
 
     // ===== 应用初始化 =====
     async function initApp() {
-      await loadVoices();
+      await Promise.all([loadVoices(), loadQuota()]);
       renderVoiceGrid();
       renderCustomVoicesList();
     }
@@ -1157,13 +1581,17 @@
         const data = await response.json();
 
         if (!response.ok) {
+          if (response.status === 429) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error + `（${errData.current}/${errData.limit}）`);
+          }
           throw new Error(data.error || `克隆失败 (${response.status})`);
         }
 
         showCloneSuccess(`音色 "${voiceName}" 克隆成功！可在"语音合成"中选择使用`);
 
-        // 刷新音色列表
-        await loadVoices();
+        // 刷新音色列表和配额
+        await Promise.all([loadVoices(), loadQuota()]);
         renderVoiceGrid();
         renderCustomVoicesList();
 
@@ -1229,6 +1657,9 @@
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
+          if (response.status === 429) {
+            throw new Error(errorData.error + (errorData.limit > 0 ? `（${errorData.used || errorData.current}/${errorData.limit}）` : ''));
+          }
           throw new Error(errorData.error || `请求失败 (${response.status})`);
         }
 
@@ -1236,6 +1667,8 @@
         const audioUrl = URL.createObjectURL(audioBlob);
         document.getElementById('audioPlayer').src = audioUrl;
         resultSection.classList.add('show');
+        // 刷新配额显示
+        await loadQuota();
       } catch (error) {
         showError(error.message || '生成失败，请稍后重试');
       } finally {
