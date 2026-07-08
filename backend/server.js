@@ -781,15 +781,19 @@ app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, r
 // ============================================================
 //  启动服务
 // ============================================================
-app.listen(PORT, () => {
-  const totalCustomVoices = getAllCustomVoices().length;
-  console.log(`\n🎙️  文字转语音助手服务已启动`);
-  console.log(`  打开浏览器访问: http://localhost:${PORT}\n`);
-  console.log(`  TTS 端点: DashScope multimodal-generation`);
-  console.log(`  内置音色: ${BUILTIN_VOICES.length} 种`);
-  console.log(`  自定义音色: ${totalCustomVoices} 种`);
-  if (ADMIN_PHONES.size > 0) {
-    console.log(`  管理员手机号: ${[...ADMIN_PHONES].join(', ')}`);
-  }
-  console.log();
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    const totalCustomVoices = getAllCustomVoices().length;
+    console.log(`\n🎙️  文字转语音助手服务已启动`);
+    console.log(`  打开浏览器访问: http://localhost:${PORT}\n`);
+    console.log(`  TTS 端点: DashScope multimodal-generation`);
+    console.log(`  内置音色: ${BUILTIN_VOICES.length} 种`);
+    console.log(`  自定义音色: ${totalCustomVoices} 种`);
+    if (ADMIN_PHONES.size > 0) {
+      console.log(`  管理员手机号: ${[...ADMIN_PHONES].join(', ')}`);
+    }
+    console.log();
+  });
+}
+
+module.exports = app;

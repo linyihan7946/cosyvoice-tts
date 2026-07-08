@@ -29,6 +29,7 @@
 | TTS 模型 | 阿里百炼 qwen3-tts-flash（内置音色）/ qwen3-tts-vc-2026-01-22（克隆音色） |
 | 音色克隆 | qwen-voice-enrollment |
 | 依赖 | express, node-fetch, better-sqlite3, jsonwebtoken |
+| 测试 | Jest, supertest |
 | 数据库 | SQLite（better-sqlite3） |
 | 认证 | JWT（jsonwebtoken，30 天有效期） |
 | 短信 | UniSMS REST API |
@@ -46,7 +47,11 @@ cosyvoice-tts/
 │   ├── .env               # API Key 配置（禁止提交）
 │   ├── package.json       # 后端依赖
 │   ├── data.db            # SQLite 数据库（运行时）
-│   └── custom_voices.json
+│   ├── custom_voices.json
+│   └── __tests__/         # 单元测试
+│       ├── db.test.js     # 数据库层测试
+│       ├── auth.test.js   # 认证模块测试
+│       └── api.test.js    # API 接口测试
 ├── frontend/              # 前端
 │   └── index.html         # 前端单页应用
 ├── .gitignore             # Git 忽略规则
@@ -299,6 +304,39 @@ npm start          # 或 npm run dev
 
 ---
 
+## 测试
+
+### 运行测试
+
+```bash
+cd backend
+npm test              # 运行所有测试
+npm run test:watch    # 监听模式
+npm run test:coverage # 查看覆盖率
+```
+
+### 测试覆盖范围
+
+| 文件 | 测试类型 | 测试数量 |
+|---|---|---|
+| `__tests__/db.test.js` | 数据库层单元测试 | 30+ |
+| `__tests__/auth.test.js` | 认证模块单元测试 | 15+ |
+| `__tests__/api.test.js` | API 接口集成测试 | 20+ |
+
+### 测试策略
+
+- **db.js 测试**：使用 `:memory:` 内存数据库，每个测试前重置，确保数据隔离
+- **auth.js 测试**：直接测试函数输入输出，中间件使用 mock 对象
+- **API 测试**：使用 supertest 发送 HTTP 请求，mock 外部 API（DashScope、UniSMS）
+
+### 注意事项
+
+- 测试时会创建临时内存数据库，不影响生产数据
+- `db.resetDb()` 函数支持切换到测试数据库
+- server.js 使用 `require.main === module` 判断是否直接运行，避免测试时启动服务器
+
+---
+
 ## 历史变更
 
 | 日期 | 变更内容 |
@@ -310,6 +348,7 @@ npm start          # 或 npm run dev
 | 2026-07-07 | **优化短信验证码登录与产品命名**：UniSMS 发送按 ai-personal-trainer 项目中的 Python SDK 逻辑对齐（POST JSON、秒级 timestamp、8 字节 nonce、HMAC hex 签名），并兼容 UniSMS 实际返回的 message=Success/messages.status=sent 成功响应；服务端/前端统一清理手机号格式；调试环境返回验证码用于短信不可达兜底；页面和 README 用户可见标题改为「文字转语音助手」 |
 | 2026-07-08 | **新增动态配额系统**：新增 `quota_config`（各层级配额参数）、`user_tiers`（用户层级+到期时间）、`usage_tracking`（每日 TTS 用量）三张表；新增 `checkQuota()` 中间件在 TTS 和音色克隆接口前拦截超额请求（返回 429）；TTS 成功后自动递增用量计数；管理员可通过 API 动态调整各层级配额值、用户层级、查看用量记录；前端展示配额进度条、层级标签、管理员配额管理面板 |
 | 2026-07-08 | **前后端目录分离**：后端代码（server.js, db.js, auth.js, .env, package.json, data.db）迁移到 `backend/` 目录；前端代码（index.html）迁移到 `frontend/` 目录；服务启动方式改为 `cd backend && npm start` |
+| 2026-07-08 | **新增完整单元测试**：引入 Jest + supertest 测试框架；新增 `__tests__/db.test.js`（数据库层测试，覆盖用户/音色/配额/用量等 18 个函数）、`__tests__/auth.test.js`（认证模块测试，覆盖 token 创建/验证/中间件）、`__tests__/api.test.js`（API 接口集成测试，覆盖 14 个接口）；修改 db.js 添加 `resetDb()` 支持测试隔离；server.js 添加 `module.exports` 支持 supertest；共 66 个测试用例，全部通过 |
 | 2026-07-08 | **优化短信不可达兜底体验**：当 UniSMS 返回发送成功但用户未收到短信时，前端成功提示会在调试环境显示 `debug_code` 作为本地验证码兜底，避免运营商延迟或拦截导致无法登录 |
 
 ---

@@ -2,7 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const crypto = require('crypto');
 
-const DB_PATH = path.join(__dirname, 'data.db');
+let DB_PATH = path.join(__dirname, 'data.db');
 
 let db;
 
@@ -14,6 +14,18 @@ function getDb() {
     initTables();
   }
   return db;
+}
+
+// 测试用：重置数据库连接，支持传入内存数据库路径
+function resetDb(testPath) {
+  if (db) {
+    try { db.close(); } catch (e) {}
+    db = null;
+  }
+  if (testPath !== undefined) {
+    DB_PATH = testPath;
+  }
+  return getDb();
 }
 
 function initTables() {
@@ -259,6 +271,7 @@ function migrateFromJson(jsonPath) {
 
 module.exports = {
   getDb,
+  resetDb,
   getUserByPhone,
   getUserById,
   createUser,
