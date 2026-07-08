@@ -646,11 +646,14 @@ app.get(routePath('/api/voices'), optionalAuth, (req, res) => {
 
 // 语音合成接口
 app.post(routePath('/api/tts'), authMiddleware, checkQuota('tts'), async (req, res) => {
-  const { text, voice } = req.body;
+  let { text, voice } = req.body;
 
   if (!text || !voice) {
     return res.status(400).json({ error: '请提供文本和音色' });
   }
+
+  // 预处理文本：将换行符替换为空格，确保 TTS 能继续读取后续文本
+  text = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 
   // 检查克隆音色所有权
   if (voice.startsWith('qwen-tts-vc-')) {

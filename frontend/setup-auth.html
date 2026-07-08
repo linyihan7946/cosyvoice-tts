@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>免登录设置</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            color: #1a1a2e;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+            font-weight: 500;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #e7f3ff;
+            color: #004085;
+            border: 1px solid #b8daff;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 免登录设置</h1>
+        <div id="status" class="status"></div>
+        <div class="info">
+            <strong>用户信息：</strong><br>
+            手机号：15915907946<br>
+            昵称：用户7946<br>
+            身份：管理员<br>
+            等级：admin
+        </div>
+        <button onclick="goToApp()">进入应用</button>
+    </div>
+
+    <script>
+        // Token 信息
+        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwNzg2M2ZjNC05ZmRlLTQ4MDMtYTA1ZS1kZmM1M2E1NGMyYjgiLCJpYXQiOjE3ODM1MDI0NDUsImV4cCI6MTc4NjA5NDQ0NX0.5EDyAAAL0PQeAG73oEE_Srcgs4s7UgTjykXQRd91i_c';
+
+        // 检查是否从 URL 参数获取 token
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token');
+
+        // 使用 URL 参数或默认 token
+        const finalToken = urlToken || token;
+
+        // 保存 token 到 localStorage
+        localStorage.setItem('token', finalToken);
+
+        // 显示状态
+        const statusDiv = document.getElementById('status');
+        statusDiv.className = 'status success';
+        statusDiv.innerHTML = '✓ 登录成功！Token 已保存';
+
+        // 跳转到主应用
+        function goToApp() {
+            // 获取当前路径，去掉 setup-auth.html
+            const basePath = window.location.pathname.replace(/setup-auth\.html$/, '');
+            window.location.href = basePath + (basePath.endsWith('/') ? '' : '/');
+        }
+
+        // 自动跳转（3秒后）
+        setTimeout(() => {
+            goToApp();
+        }, 1500);
+    </script>
+</body>
+</html>
