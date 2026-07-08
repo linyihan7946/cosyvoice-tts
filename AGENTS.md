@@ -310,6 +310,7 @@ npm start          # 或 npm run dev
 | 2026-07-07 | **优化短信验证码登录与产品命名**：UniSMS 发送按 ai-personal-trainer 项目中的 Python SDK 逻辑对齐（POST JSON、秒级 timestamp、8 字节 nonce、HMAC hex 签名），并兼容 UniSMS 实际返回的 message=Success/messages.status=sent 成功响应；服务端/前端统一清理手机号格式；调试环境返回验证码用于短信不可达兜底；页面和 README 用户可见标题改为「文字转语音助手」 |
 | 2026-07-08 | **新增动态配额系统**：新增 `quota_config`（各层级配额参数）、`user_tiers`（用户层级+到期时间）、`usage_tracking`（每日 TTS 用量）三张表；新增 `checkQuota()` 中间件在 TTS 和音色克隆接口前拦截超额请求（返回 429）；TTS 成功后自动递增用量计数；管理员可通过 API 动态调整各层级配额值、用户层级、查看用量记录；前端展示配额进度条、层级标签、管理员配额管理面板 |
 | 2026-07-08 | **前后端目录分离**：后端代码（server.js, db.js, auth.js, .env, package.json, data.db）迁移到 `backend/` 目录；前端代码（index.html）迁移到 `frontend/` 目录；服务启动方式改为 `cd backend && npm start` |
+| 2026-07-08 | **优化短信不可达兜底体验**：当 UniSMS 返回发送成功但用户未收到短信时，前端成功提示会在调试环境显示 `debug_code` 作为本地验证码兜底，避免运营商延迟或拦截导致无法登录 |
 
 ---
 
@@ -328,3 +329,4 @@ npm start          # 或 npm run dev
 11. **数据存储**：用户、音色、配额配置、层级关系和用量数据存储在 SQLite（`backend/data.db`，含 5 张表：users, custom_voices, quota_config, user_tiers, usage_tracking），旧 custom_voices.json 在首次启动时自动迁移
 12. **短信发送**：UniSMS 逻辑需与 ai-personal-trainer 的 Python SDK 保持一致；鉴权参数放 URL Query，短信内容参数（to/signature/templateId/templateData）放 JSON Body；签名使用排序后的 Query + HMAC-SHA256 hex；发送成功需满足顶层 `code === "0"`，并兼容 `message === "Success"`、`data.code === "OK"` 或 `messages[].status === "sent"`；调试环境可返回 debug_code 作为验证码兜底
 13. **配额系统**：配额参数存储在 `quota_config` 表中（非 .env），支持运行时通过管理 API 动态修改无需重启；`-1` 表示无限；每日用量以 `date('now')` 为键，无需 cron 清理；管理员层级兼容 `ADMIN_PHONES` 环境变量（优先级最高）
+14. **短信兜底体验**：前端在 `sms_sent: true` 且响应包含 `debug_code` 时，可在成功提示中显示本地验证码；生产环境应设置 `NODE_ENV=production` 或关闭 `SHOW_DEBUG_CODE`，避免暴露验证码
