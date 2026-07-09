@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -332,6 +332,114 @@
     .generate-btn-wrapper .generate-btn {
       margin: 0;
     }
+
+    /* 生成结果页面（覆盖层） */
+    .result-page {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #fff;
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+    }
+    .result-page.show {
+      display: flex;
+    }
+    .result-page-inner {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 0 40px;
+      box-sizing: border-box;
+    }
+    .result-page-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 0;
+      border-bottom: 1px solid #eee;
+      flex-shrink: 0;
+    }
+    .back-btn {
+      padding: 6px 12px;
+      background: #f0f0f0;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #333;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .back-btn:hover { background: #e0e0e0; }
+    .result-page-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+    .result-page-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .result-text-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .result-text-section label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+    .result-text-section textarea {
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+      padding: 16px;
+      border: 2px solid #e8e8e8;
+      border-radius: 12px;
+      font-size: 15px;
+      line-height: 1.6;
+      font-family: inherit;
+      resize: none;
+      background: #f9f9f9;
+      color: #333;
+    }
+    .result-page-footer {
+      flex-shrink: 0;
+      padding: 16px 0;
+      border-top: 1px solid #eee;
+    }
+    .result-page-footer audio {
+      width: 100%;
+      margin-bottom: 12px;
+    }
+    .result-page-footer .download-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .result-page-footer .download-btn:hover { opacity: 0.9; }
 
     .generate-btn-fixed {
       position: fixed;
@@ -801,6 +909,14 @@
       .header h1 { font-size: 20px; }
       .header p { font-size: 13px; }
 
+      /* 结果页面适配 */
+      .result-page { padding: 0 16px; }
+      .result-page-header { padding: 12px 0; }
+      .back-btn { padding: 5px 10px; font-size: 12px; }
+      .result-page-title { font-size: 15px; }
+      .result-text-section textarea { padding: 12px; }
+      .result-page-footer { padding: 12px 0; }
+
       /* Tab 栏适配 */
       .tabs { gap: 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .tab-btn { padding: 8px 12px; font-size: 13px; white-space: nowrap; }
@@ -1008,13 +1124,24 @@
 
         <div class="error-msg" id="errorMsg"></div>
 
-        <div class="result-section" id="resultSection">
-          <div class="result-label">🎧 生成结果</div>
-          <div class="audio-player-wrapper">
-            <audio id="audioPlayer" controls></audio>
-            <button class="download-btn" onclick="downloadAudio()">⬇️ 下载音频</button>
-          </div>
-        </div>
+        <!-- 生成结果页面（覆盖层） -->
+<div class="result-page" id="resultPage">
+    <div class="result-page-inner">
+      <div class="result-page-header">
+    <button class="back-btn" onclick="closeResultPage()">← 返回</button>
+    <span class="result-page-title">🎧 生成结果</span>
+  </div>
+  <div class="result-page-content">
+    <div class="result-text-section">
+      <label> 文案内容</label>
+      <textarea id="resultTextDisplay" readonly></textarea>
+    </div>
+  </div>
+  <div class="result-page-footer">
+    <audio id="audioPlayer" controls></audio>
+    <button class="download-btn" onclick="downloadAudio()">⬇️ 下载配音</button>
+      </div></div>
+</div>
 
         <!-- 生成按钮固定在底部 -->
         <div class="generate-btn-fixed">
@@ -1969,10 +2096,10 @@
       const text = document.getElementById('textInput').value.trim();
       const btn = document.getElementById('generateBtn');
       const errorMsg = document.getElementById('errorMsg');
-      const resultSection = document.getElementById('resultSection');
+      const resultPage = document.getElementById('resultPage');
 
       errorMsg.classList.remove('show');
-      resultSection.classList.remove('show');
+      resultPage.classList.remove('show');
 
       if (!text) { showError('请输入文案内容'); return; }
       if (!selectedVoice) { showError('请选择音色'); return; }
@@ -1999,7 +2126,9 @@
         audioBlob = await response.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
         document.getElementById('audioPlayer').src = audioUrl;
-        resultSection.classList.add('show');
+        // 将文案内容填入结果页面的文本框
+        document.getElementById('resultTextDisplay').value = text;
+        resultPage.classList.add('show');
         // 刷新配额显示
         await loadQuota();
       } catch (error) {
@@ -2010,7 +2139,12 @@
       }
     }
 
-    // ===== 下载音频 =====
+    // 关闭结果页面，返回编辑
+    function closeResultPage() {
+      document.getElementById('resultPage').classList.remove('show');
+    }
+
+    // ===== 下载配音 =====
     function downloadAudio() {
       if (!audioBlob) return;
       const url = URL.createObjectURL(audioBlob);
@@ -2076,3 +2210,6 @@
   </script>
 </body>
 </html>
+
+
+
