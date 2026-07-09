@@ -18,18 +18,29 @@
 ### 2. 配置
 
 ```bash
-# 复制并编辑 .env 文件
-echo "DASHSCOPE_API_KEY=sk-你的APIKey" > .env
+# 复制并编辑 backend/.env 文件
+echo "DASHSCOPE_API_KEY=sk-你的APIKey" > backend/.env
 ```
+
+数据库使用 MySQL。可通过 `DATABASE_URL`/`MYSQL_URL`，或 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`、`MYSQL_DATABASE` 配置连接。
 
 ### 3. 运行
 
 ```bash
+cd backend
 npm install
 npm start
 ```
 
 打开浏览器访问 `http://localhost:3000`
+
+### Docker 部署
+
+```bash
+docker compose up -d --build
+```
+
+`docker-compose.yml` 会启动 MySQL，并把数据保存到 `cosyvoice_mysql_data` Docker 命名卷。重新构建和重新部署会保留数据；不要在没有备份时执行 `docker compose down -v` 或删除该 volume。
 
 ## 可用音色
 
@@ -57,6 +68,7 @@ npm start
 
 - Node.js + Express
 - 原生 HTML/CSS/JS 前端
+- MySQL + mysql2
 - qwen3-tts-flash 模型
 
 ## License

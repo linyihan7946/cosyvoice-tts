@@ -13,7 +13,7 @@ const envPath = path.join(__dirname, '.env');
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf-8');
   envContent.split('\n').forEach(line => {
-    const match = line.match(/^([A-Z_]+)=(.*)$/);
+    const match = line.trim().match(/^([A-Z0-9_]+)=(.*)$/);
     if (match) process.env[match[1]] = match[2].trim();
   });
 }
@@ -109,9 +109,9 @@ const SMS_SDK_SCRIPT = path.join(__dirname, 'send_sms_unisdk.py');
 // ============================================================
 
 // 解析用户层级：ADMIN_PHONES 优先 → user_tiers 表 → 默认 free
-function resolveUserTier(user) {
+async function resolveUserTier(user) {
   if (user.is_admin) return 'admin';
-  const dbTier = getUserTier(user.id);
+  const dbTier = await getUserTier(user.id);
   // 检查会员是否过期
   if (dbTier.tier === 'monthly' && dbTier.expiresAt) {
     const expiresAt = new Date(dbTier.expiresAt + 'T23:59:59');
@@ -121,23 +121,23 @@ function resolveUserTier(user) {
 }
 
 // 获取配额值
-function getQuotaValue(tier, key) {
-  const config = getQuotaConfig(tier);
+async function getQuotaValue(tier, key) {
+  const config = await getQuotaConfig(tier);
   return config[key] !== undefined ? config[key] : 0;
 }
 
 // 配额检查中间件
 function checkQuota(resource) {
-  return (req, res, next) => {
-    const user = getUserById(req.userId);
+  return async (req, res, next) => {
+    const user = await getUserById(req.userId);
     if (!user) return res.status(401).json({ error: '用户不存在' });
 
-    const tier = resolveUserTier(user);
+    const tier = await resolveUserTier(user);
 
     if (resource === 'voice_clone') {
-      const maxClones = getQuotaValue(tier, 'max_voice_clones');
+      const maxClones = await getQuotaValue(tier, 'max_voice_clones');
       if (maxClones > 0) {
-        const currentClones = getCustomVoicesByUserId(req.userId).length;
+        const currentClones = (await getCustomVoicesByUserId(req.userId)).length;
         if (currentClones >= maxClones) {
           return res.status(429).json({
             error: '已达音色克隆上限',
@@ -150,10 +150,10 @@ function checkQuota(resource) {
     }
 
     if (resource === 'tts') {
-      const dailyLimit = getQuotaValue(tier, 'daily_tts_limit');
+      const dailyLimit = await getQuotaValue(tier, 'daily_tts_limit');
       if (dailyLimit === -1) return next(); // -1 表示无限
       if (dailyLimit > 0) {
-        const todayUsage = getTodayUsage(req.userId);
+        const todayUsage = await getTodayUsage(req.userId);
         if (todayUsage >= dailyLimit) {
           return res.status(429).json({
             error: '今日语音生成次数已用完',
@@ -375,10 +375,14 @@ async function sendSms(phone, code) {
 }
 
 // ============================================================
-//  数据迁移：从 custom_voices.json 迁移到 SQLite
+//  数据迁移：从 custom_voices.json 迁移到 MySQL
 // ============================================================
 const CUSTOM_VOICES_JSON = path.join(__dirname, 'custom_voices.json');
-migrateFromJson(CUSTOM_VOICES_JSON);
+if (process.env.NODE_ENV !== 'test') {
+  migrateFromJson(CUSTOM_VOICES_JSON).catch(err => {
+    console.error('[DB] custom_voices.json 迁移失败:', err.message);
+  });
+}
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -443,26 +447,26 @@ app.post(routePath('/api/auth/login'), async (req, res) => {
   }
 
   // 查找或创建用户
-  let user = getUserByPhone(phone);
+  let user = await getUserByPhone(phone);
   if (!user) {
     const nickname = `用户${phone.slice(-4)}`;
-    user = createUser(phone, nickname);
+    user = await createUser(phone, nickname);
     console.log(`[Auth] 新用户注册: ${phone} (${user.id})`);
   }
 
   // 检查是否为管理员
   if (ADMIN_PHONES.has(phone) && !user.is_admin) {
-    setUserAdmin(user.id, true);
+    await setUserAdmin(user.id, true);
     user.is_admin = 1;
   }
   // 同步 admin 层级到 user_tiers
   if (user.is_admin) {
-    setUserTier(user.id, 'admin', null);
+    await setUserTier(user.id, 'admin', null);
   }
 
   const token = createToken(user.id);
-  const tier = resolveUserTier(user);
-  const tierInfo = getUserTier(user.id);
+  const tier = await resolveUserTier(user);
+  const tierInfo = await getUserTier(user.id);
 
   res.json({
     token,
@@ -478,13 +482,13 @@ app.post(routePath('/api/auth/login'), async (req, res) => {
 });
 
 // 获取当前用户信息
-app.get(routePath('/api/auth/me'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.get(routePath('/api/auth/me'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user) {
     return res.status(404).json({ error: '用户不存在' });
   }
-  const tier = resolveUserTier(user);
-  const tierInfo = getUserTier(req.userId);
+  const tier = await resolveUserTier(user);
+  const tierInfo = await getUserTier(req.userId);
   res.json({
     id: user.id,
     phone: user.phone,
@@ -496,25 +500,25 @@ app.get(routePath('/api/auth/me'), authMiddleware, (req, res) => {
 });
 
 // 管理员统计
-app.get(routePath('/api/auth/admin/stats'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.get(routePath('/api/auth/admin/stats'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) {
     return res.status(403).json({ error: '无权访问' });
   }
-  res.json(getStats());
+  res.json(await getStats());
 });
 
 // 用户配额查询
-app.get(routePath('/api/quota'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.get(routePath('/api/quota'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user) return res.status(404).json({ error: '用户不存在' });
 
-  const tier = resolveUserTier(user);
-  const voiceCloneLimit = getQuotaValue(tier, 'max_voice_clones');
-  const dailyTtsLimit = getQuotaValue(tier, 'daily_tts_limit');
-  const currentClones = getCustomVoicesByUserId(req.userId).length;
-  const todayTts = getTodayUsage(req.userId);
-  const userTierInfo = getUserTier(req.userId);
+  const tier = await resolveUserTier(user);
+  const voiceCloneLimit = await getQuotaValue(tier, 'max_voice_clones');
+  const dailyTtsLimit = await getQuotaValue(tier, 'daily_tts_limit');
+  const currentClones = (await getCustomVoicesByUserId(req.userId)).length;
+  const todayTts = await getTodayUsage(req.userId);
+  const userTierInfo = await getUserTier(req.userId);
 
   res.json({
     tier,
@@ -535,15 +539,15 @@ app.get(routePath('/api/quota'), authMiddleware, (req, res) => {
 // ============================================================
 
 // 获取所有配额配置
-app.get(routePath('/api/auth/admin/quota-config'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.get(routePath('/api/auth/admin/quota-config'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
-  res.json(getAllQuotaConfig());
+  res.json(await getAllQuotaConfig());
 });
 
 // 修改配额配置
-app.put(routePath('/api/auth/admin/quota-config'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.put(routePath('/api/auth/admin/quota-config'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
 
   const { tier, key, value } = req.body;
@@ -556,29 +560,29 @@ app.put(routePath('/api/auth/admin/quota-config'), authMiddleware, (req, res) =>
     return res.status(400).json({ error: `无效的层级，可选: ${validTiers.join(', ')}` });
   }
 
-  setQuotaConfig(tier, key, value);
+  await setQuotaConfig(tier, key, value);
   console.log(`[Admin] 配额已更新: ${tier}.${key} = ${value}`);
   res.json({ success: true });
 });
 
 // 获取所有用户层级
-app.get(routePath('/api/auth/admin/user-tiers'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.get(routePath('/api/auth/admin/user-tiers'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
 
-  const tiers = getAllUserTiers();
+  const tiers = await getAllUserTiers();
   // 附加今日 TTS 用量
   const today = new Date().toISOString().slice(0, 10);
-  const result = tiers.map(t => ({
+  const result = await Promise.all(tiers.map(async t => ({
     ...t,
-    todayTtsUsed: getUsageByDate(t.user_id, today),
-  }));
+    todayTtsUsed: await getUsageByDate(t.user_id, today),
+  })));
   res.json(result);
 });
 
 // 修改用户层级
-app.put(routePath('/api/auth/admin/user-tiers'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.put(routePath('/api/auth/admin/user-tiers'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
 
   const { userId, tier, expiresAt } = req.body;
@@ -591,20 +595,20 @@ app.put(routePath('/api/auth/admin/user-tiers'), authMiddleware, (req, res) => {
     return res.status(400).json({ error: `无效的层级，可选: ${validTiers.join(', ')}` });
   }
 
-  const targetUser = getUserById(userId);
+  const targetUser = await getUserById(userId);
   if (!targetUser) return res.status(404).json({ error: '目标用户不存在' });
 
-  setUserTier(userId, tier, expiresAt || null);
+  await setUserTier(userId, tier, expiresAt || null);
   // 如果设为 admin，同步 is_admin 标志
-  if (tier === 'admin') setUserAdmin(userId, true);
+  if (tier === 'admin') await setUserAdmin(userId, true);
 
   console.log(`[Admin] 用户层级已更新: ${targetUser.phone} → ${tier}${expiresAt ? ` (到期: ${expiresAt})` : ''}`);
   res.json({ success: true });
 });
 
 // 删除用户
-app.delete(routePath('/api/auth/admin/users/:userId'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.delete(routePath('/api/auth/admin/users/:userId'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
 
   const { userId } = req.params;
@@ -614,17 +618,17 @@ app.delete(routePath('/api/auth/admin/users/:userId'), authMiddleware, (req, res
     return res.status(400).json({ error: '不能删除自己的账号' });
   }
 
-  const targetUser = getUserById(userId);
+  const targetUser = await getUserById(userId);
   if (!targetUser) return res.status(404).json({ error: '目标用户不存在' });
 
-  deleteUser(userId);
+  await deleteUser(userId);
   console.log(`[Admin] 用户已删除: ${targetUser.phone} (${userId})`);
   res.json({ success: true });
 });
 
 // 查询用量记录
-app.get(routePath('/api/auth/admin/usage'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.get(routePath('/api/auth/admin/usage'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
 
   const { date, userId } = req.query;
@@ -632,8 +636,8 @@ app.get(routePath('/api/auth/admin/usage'), authMiddleware, (req, res) => {
 
   if (userId) {
     // 查指定用户
-    const count = getUsageByDate(userId, queryDate);
-    const targetUser = getUserById(userId);
+    const count = await getUsageByDate(userId, queryDate);
+    const targetUser = await getUserById(userId);
     return res.json([{
       userId,
       phone: targetUser?.phone || '',
@@ -643,7 +647,7 @@ app.get(routePath('/api/auth/admin/usage'), authMiddleware, (req, res) => {
   }
 
   // 查所有用户
-  const usageList = getAllUsageByDate(queryDate);
+  const usageList = await getAllUsageByDate(queryDate);
   res.json(usageList.map(u => ({
     userId: u.user_id,
     phone: u.phone,
@@ -657,16 +661,16 @@ app.get(routePath('/api/auth/admin/usage'), authMiddleware, (req, res) => {
 // ============================================================
 
 // 获取音色列表（内置 + 当前用户的自定义音色）
-app.get(routePath('/api/voices'), optionalAuth, (req, res) => {
+app.get(routePath('/api/voices'), optionalAuth, async (req, res) => {
   let customVoices = [];
   let favoriteIds = new Set();
   if (req.userId) {
-    customVoices = getCustomVoicesByUserId(req.userId);
-    favoriteIds = new Set(getUserFavorites(req.userId));
+    customVoices = await getCustomVoicesByUserId(req.userId);
+    favoriteIds = new Set(await getUserFavorites(req.userId));
   }
 
   // 系统音色：所有用户都可见
-  const systemVoices = getSystemVoices();
+  const systemVoices = await getSystemVoices();
 
   const markFavorite = v => ({ ...v, favorited: favoriteIds.has(v.id) });
 
@@ -679,26 +683,26 @@ app.get(routePath('/api/voices'), optionalAuth, (req, res) => {
 });
 
 // 收藏/取消收藏音色（仅内置和系统音色可收藏）
-app.post(routePath('/api/voices/favorite'), authMiddleware, (req, res) => {
+app.post(routePath('/api/voices/favorite'), authMiddleware, async (req, res) => {
   const { voiceId } = req.body;
   if (!voiceId) return res.status(400).json({ error: '请提供音色 ID' });
 
   // 检查是否为内置或系统音色（不能收藏用户自己的克隆音色）
   const isBuiltin = BUILTIN_VOICES.some(v => v.id === voiceId);
-  const customVoice = getCustomVoiceById(voiceId);
+  const customVoice = await getCustomVoiceById(voiceId);
   const isSystem = customVoice && customVoice.is_system;
 
   if (!isBuiltin && !isSystem) {
     return res.status(400).json({ error: '该音色不支持收藏' });
   }
 
-  addFavorite(req.userId, voiceId);
+  await addFavorite(req.userId, voiceId);
   res.json({ success: true, favorited: true });
 });
 
-app.delete(routePath('/api/voices/favorite/:voiceId'), authMiddleware, (req, res) => {
+app.delete(routePath('/api/voices/favorite/:voiceId'), authMiddleware, async (req, res) => {
   const { voiceId } = req.params;
-  removeFavorite(req.userId, voiceId);
+  await removeFavorite(req.userId, voiceId);
   res.json({ success: true, favorited: false });
 });
 
@@ -715,7 +719,7 @@ app.post(routePath('/api/tts'), authMiddleware, checkQuota('tts'), async (req, r
 
   // 检查克隆音色所有权
   if (voice.startsWith('qwen-tts-vc-')) {
-    const customVoice = getCustomVoiceById(voice);
+    const customVoice = await getCustomVoiceById(voice);
     if (!customVoice) {
       return res.status(404).json({ error: '音色不存在' });
     }
@@ -772,7 +776,7 @@ app.post(routePath('/api/tts'), authMiddleware, checkQuota('tts'), async (req, r
     res.send(audioBuffer);
 
     // TTS 成功后递增用量
-    incrementTtsUsage(req.userId);
+    await incrementTtsUsage(req.userId);
   } catch (error) {
     console.error('TTS Error:', error);
     res.status(500).json({ error: '服务器错误: ' + error.message });
@@ -797,7 +801,7 @@ app.post(routePath('/api/voice-clone'), authMiddleware, checkQuota('voice_clone'
   }
 
   // 检查重名（在当前用户的自定义音色中）
-  const userVoices = getCustomVoicesByUserId(req.userId);
+  const userVoices = await getCustomVoicesByUserId(req.userId);
   if (userVoices.find(v => v.name === voiceName)) {
     return res.status(400).json({ error: `音色 "${voiceName}" 已存在，请换个名称` });
   }
@@ -841,7 +845,7 @@ app.post(routePath('/api/voice-clone'), authMiddleware, checkQuota('voice_clone'
     }
 
     // 保存到数据库（关联当前用户）
-    const newVoice = addCustomVoice(clonedVoice, req.userId, voiceName, '自定义克隆音色');
+    const newVoice = await addCustomVoice(clonedVoice, req.userId, voiceName, '自定义克隆音色');
 
     console.log(`✅ 音色克隆成功: "${voiceName}" → voice ID: "${clonedVoice}" (user: ${req.userId})`);
     res.json({ success: true, voice: newVoice });
@@ -854,7 +858,7 @@ app.post(routePath('/api/voice-clone'), authMiddleware, checkQuota('voice_clone'
 // 删除克隆音色
 app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, res) => {
   const { voiceId } = req.params;
-  const voice = getCustomVoiceById(voiceId);
+  const voice = await getCustomVoiceById(voiceId);
 
   if (!voice) {
     return res.status(404).json({ error: '音色不存在' });
@@ -889,7 +893,7 @@ app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, r
     }
 
     // 从数据库移除
-    deleteCustomVoice(voiceId);
+    await deleteCustomVoice(voiceId);
 
     console.log(`✅ 音色已删除: "${voice.name}" (${voiceId})`);
     res.json({ success: true });
@@ -905,7 +909,7 @@ app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, r
 
 // 管理员：通过音频文件路径克隆系统音色
 app.post(routePath('/api/auth/admin/clone-system-voice'), authMiddleware, async (req, res) => {
-  const user = getUserById(req.userId);
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
 
   const { audioFilePath, voiceName, audioBase64, audioText, language } = req.body;
@@ -920,7 +924,7 @@ app.post(routePath('/api/auth/admin/clone-system-voice'), authMiddleware, async 
   }
 
   // 检查重名
-  const existingSystem = getSystemVoices().find(v => v.name === voiceName);
+  const existingSystem = (await getSystemVoices()).find(v => v.name === voiceName);
   if (existingSystem) {
     return res.status(400).json({ error: `系统音色 "${voiceName}" 已存在` });
   }
@@ -986,7 +990,7 @@ app.post(routePath('/api/auth/admin/clone-system-voice'), authMiddleware, async 
     }
 
     // 保存为系统音色（user_id = 'system', is_system = 1）
-    const newVoice = addSystemVoice(clonedVoiceId, voiceName, '');
+    const newVoice = await addSystemVoice(clonedVoiceId, voiceName, '');
 
     console.log(`✅ 系统音色克隆成功: "${voiceName}" → ${clonedVoiceId}`);
     res.json({ success: true, voice: newVoice });
@@ -997,24 +1001,24 @@ app.post(routePath('/api/auth/admin/clone-system-voice'), authMiddleware, async 
 });
 
 // 管理员：列出所有系统音色
-app.get(routePath('/api/auth/admin/system-voices'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.get(routePath('/api/auth/admin/system-voices'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
-  res.json(getSystemVoices());
+  res.json(await getSystemVoices());
 });
 
 // 管理员：删除系统音色
-app.delete(routePath('/api/auth/admin/system-voices/:voiceId'), authMiddleware, (req, res) => {
-  const user = getUserById(req.userId);
+app.delete(routePath('/api/auth/admin/system-voices/:voiceId'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
   if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
 
   const { voiceId } = req.params;
-  const voice = getCustomVoiceById(voiceId);
+  const voice = await getCustomVoiceById(voiceId);
 
   if (!voice) return res.status(404).json({ error: '音色不存在' });
   if (!voice.is_system) return res.status(400).json({ error: '不是系统音色' });
 
-  deleteCustomVoice(voiceId);
+  await deleteCustomVoice(voiceId);
   console.log(`[Admin] 系统音色已删除: "${voice.name}" (${voiceId})`);
   res.json({ success: true });
 });
@@ -1023,8 +1027,8 @@ app.delete(routePath('/api/auth/admin/system-voices/:voiceId'), authMiddleware, 
 //  启动服务
 // ============================================================
 if (require.main === module) {
-  app.listen(PORT, () => {
-    const totalCustomVoices = getAllCustomVoices().length;
+  app.listen(PORT, async () => {
+    const totalCustomVoices = (await getAllCustomVoices()).length;
     console.log(`\n🎙️  文字转语音助手服务已启动`);
     console.log(`  打开浏览器访问: http://localhost:${PORT}\n`);
     console.log(`  TTS 端点: DashScope multimodal-generation`);

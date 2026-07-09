@@ -2,6 +2,10 @@ const request = require('supertest');
 const db = require('../db');
 const { createToken } = require('../auth');
 
+afterAll(async () => {
+  await db.closeDb();
+});
+
 // Mock node-fetch 避免真实 API 调用
 jest.mock('node-fetch', () => {
   return jest.fn(() =>
@@ -22,8 +26,8 @@ jest.mock('node-fetch', () => {
 const app = require('../server');
 
 describe('API - 认证接口', () => {
-  beforeEach(() => {
-    db.resetDb(':memory:');
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
   });
 
   describe('POST /api/auth/send-code', () => {
@@ -75,7 +79,7 @@ describe('API - 认证接口', () => {
     });
 
     test('已登录返回用户信息', async () => {
-      const user = db.createUser('13800138000', '测试用户');
+      const user = await db.createUser('13800138000', '测试用户');
       const token = createToken(user.id);
       const res = await request(app)
         .get('/api/auth/me')
@@ -95,8 +99,8 @@ describe('API - 认证接口', () => {
 });
 
 describe('API - 音色接口', () => {
-  beforeEach(() => {
-    db.resetDb(':memory:');
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
   });
 
   describe('GET /api/voices', () => {
@@ -109,8 +113,8 @@ describe('API - 音色接口', () => {
     });
 
     test('已登录返回内置 + 自定义音色', async () => {
-      const user = db.createUser('13800138000', '测试');
-      db.addCustomVoice('vc-001', user.id, 'myvoice');
+      const user = await db.createUser('13800138000', '测试');
+      await db.addCustomVoice('vc-001', user.id, 'myvoice');
       const token = createToken(user.id);
       const res = await request(app)
         .get('/api/voices')
@@ -124,8 +128,8 @@ describe('API - 音色接口', () => {
 });
 
 describe('API - 配额接口', () => {
-  beforeEach(() => {
-    db.resetDb(':memory:');
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
   });
 
   describe('GET /api/quota', () => {
@@ -135,7 +139,7 @@ describe('API - 配额接口', () => {
     });
 
     test('已登录返回配额信息', async () => {
-      const user = db.createUser('13800138000', '测试');
+      const user = await db.createUser('13800138000', '测试');
       const token = createToken(user.id);
       const res = await request(app)
         .get('/api/quota')
@@ -156,13 +160,13 @@ describe('API - 管理员接口', () => {
   let adminUser;
   let normalUser;
 
-  beforeEach(() => {
-    db.resetDb(':memory:');
-    adminUser = db.createUser('13800138000', '管理员');
-    db.setUserAdmin(adminUser.id, true);
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
+    adminUser = await db.createUser('13800138000', '管理员');
+    await db.setUserAdmin(adminUser.id, true);
     adminToken = createToken(adminUser.id);
 
-    normalUser = db.createUser('13900139000', '普通用户');
+    normalUser = await db.createUser('13900139000', '普通用户');
     userToken = createToken(normalUser.id);
   });
 
@@ -202,7 +206,7 @@ describe('API - 管理员接口', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
 
-      const config = db.getQuotaConfig('free');
+      const config = await db.getQuotaConfig('free');
       expect(config.daily_tts_limit).toBe(20);
     });
 
@@ -232,7 +236,7 @@ describe('API - 管理员接口', () => {
         .send({ userId: normalUser.id, tier: 'monthly', expiresAt: '2026-12-31' });
       expect(res.status).toBe(200);
 
-      const tier = db.getUserTier(normalUser.id);
+      const tier = await db.getUserTier(normalUser.id);
       expect(tier.tier).toBe('monthly');
       expect(tier.expiresAt).toBe('2026-12-31');
     });
@@ -240,8 +244,8 @@ describe('API - 管理员接口', () => {
 
   describe('用量记录', () => {
     test('GET /api/auth/admin/usage 查询用量', async () => {
-      db.incrementTtsUsage(normalUser.id);
-      db.incrementTtsUsage(normalUser.id);
+      await db.incrementTtsUsage(normalUser.id);
+      await db.incrementTtsUsage(normalUser.id);
       const today = new Date().toISOString().slice(0, 10);
 
       const res = await request(app)
@@ -256,17 +260,17 @@ describe('API - 管理员接口', () => {
 });
 
 describe('API - TTS 配额检查', () => {
-  beforeEach(() => {
-    db.resetDb(':memory:');
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
   });
 
   test('超额 TTS 请求返回 429', async () => {
-    const user = db.createUser('13800138000', '测试');
+    const user = await db.createUser('13800138000', '测试');
     const token = createToken(user.id);
 
     // 默认 free 用户每天 10 次，模拟已用完
     for (let i = 0; i < 10; i++) {
-      db.incrementTtsUsage(user.id);
+      await db.incrementTtsUsage(user.id);
     }
 
     const res = await request(app)
@@ -279,8 +283,8 @@ describe('API - TTS 配额检查', () => {
   });
 
   test('管理员 TTS 无限制', async () => {
-    const admin = db.createUser('13800138000', '管理员');
-    db.setUserAdmin(admin.id, true);
+    const admin = await db.createUser('13800138000', '管理员');
+    await db.setUserAdmin(admin.id, true);
     const token = createToken(admin.id);
 
     // 管理员 daily_tts_limit = -1，不限制
@@ -295,16 +299,16 @@ describe('API - TTS 配额检查', () => {
 });
 
 describe('API - 音色克隆配额检查', () => {
-  beforeEach(() => {
-    db.resetDb(':memory:');
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
   });
 
   test('超额克隆请求返回 429', async () => {
-    const user = db.createUser('13800138000', '测试');
+    const user = await db.createUser('13800138000', '测试');
     const token = createToken(user.id);
 
     // free 用户最多 1 个克隆
-    db.addCustomVoice('vc-001', user.id, 'existing');
+    await db.addCustomVoice('vc-001', user.id, 'existing');
 
     const res = await request(app)
       .post('/api/voice-clone')
@@ -321,12 +325,12 @@ describe('API - 音色克隆配额检查', () => {
 });
 
 describe('API - 删除音色', () => {
-  beforeEach(() => {
-    db.resetDb(':memory:');
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
   });
 
   test('删除不存在的音色返回 404', async () => {
-    const user = db.createUser('13800138000', '测试');
+    const user = await db.createUser('13800138000', '测试');
     const token = createToken(user.id);
 
     const res = await request(app)
@@ -337,9 +341,9 @@ describe('API - 删除音色', () => {
   });
 
   test('删除他人音色返回 403', async () => {
-    const user1 = db.createUser('13800138000', '用户1');
-    const user2 = db.createUser('13900139000', '用户2');
-    db.addCustomVoice('vc-001', user1.id, 'voice1');
+    const user1 = await db.createUser('13800138000', '用户1');
+    const user2 = await db.createUser('13900139000', '用户2');
+    await db.addCustomVoice('vc-001', user1.id, 'voice1');
     const token2 = createToken(user2.id);
 
     const res = await request(app)

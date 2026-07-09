@@ -9,7 +9,6 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
-  DB_PATH=/app/data/data.db \
   PYTHON_BIN=/opt/venv/bin/python \
   PATH="/opt/venv/bin:${PATH}"
 
@@ -22,7 +21,6 @@ WORKDIR /app
 COPY frontend/ ./frontend/
 
 WORKDIR /app/backend
-RUN mkdir -p /app/data
 
 EXPOSE 3000
 
