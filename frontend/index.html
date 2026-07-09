@@ -310,6 +310,47 @@
       flex: 1;
       overflow-y: auto;
       min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 表单内容区（可滚动） */
+    .form-content {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    /* 生成按钮固定在底部 */
+    .generate-btn-wrapper {
+      flex-shrink: 0;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .generate-btn-wrapper .generate-btn {
+      margin: 0;
+    }
+
+    .generate-btn-fixed {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      width: min(calc(100% - 40px), 780px);
+      background: linear-gradient(180deg, rgba(255,255,255,0), #fff 28%, #fff);
+      padding: 18px 40px 16px;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    .generate-btn-fixed .generate-btn {
+      pointer-events: auto;
+    }
+
+    #tab-tts {
+      padding-bottom: 104px;
     }
 
     /* ===== 标题区（固定在顶部） ===== */
@@ -408,7 +449,17 @@
       grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
       gap: 10px;
       margin-top: 4px;
+      height: clamp(240px, calc(100vh - 520px), 420px);
+      overflow-y: auto;
+      padding-right: 4px;
+      align-content: start;
     }
+
+    /* 滚动条样式 */
+    .voice-grid::-webkit-scrollbar { width: 4px; }
+    .voice-grid::-webkit-scrollbar-track { background: transparent; }
+    .voice-grid::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+    .voice-grid::-webkit-scrollbar-thumb:hover { background: #999; }
 
     .voice-card {
       padding: 12px;
@@ -738,6 +789,12 @@
       }
 
       .content-area { padding: 0 16px 16px; }
+      .generate-btn-fixed {
+        bottom: 0;
+        width: 100%;
+        padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+      }
+      #tab-tts { padding-bottom: 96px; }
       .header-area { padding: 16px 16px 0; }
       .user-bar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
       .header { margin-bottom: 16px; }
@@ -766,7 +823,11 @@
       .login-container { padding: 24px; border-radius: 16px; max-width: 100%; }
 
       /* 音色网格 */
-      .voice-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .voice-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        height: clamp(220px, calc(100vh - 480px), 320px);
+      }
       .voice-card { padding: 10px; }
 
       /* 克隆表单 */
@@ -846,7 +907,10 @@
     }
 
     @media (max-width: 380px) {
-      .voice-grid { grid-template-columns: 1fr; }
+      .voice-grid {
+        grid-template-columns: 1fr;
+        height: clamp(180px, calc(100vh - 500px), 240px);
+      }
       .stats-grid { grid-template-columns: 1fr; }
       .login-container { padding: 20px; }
       .header h1 { font-size: 18px; }
@@ -932,7 +996,7 @@
         </div>
 
         <div class="form-group">
-          <label>🎤 选择音色</label>
+          <label> 选择音色</label>
           <div class="voice-filter-tabs">
             <div class="voice-filter-tab active" data-filter="all" onclick="filterVoices('all')">全部</div>
             <div class="voice-filter-tab" data-filter="favorite" onclick="filterVoices('favorite')">⭐ 收藏</div>
@@ -942,12 +1006,6 @@
           <div class="voice-grid" id="voiceGrid"></div>
         </div>
 
-        <button class="generate-btn" id="generateBtn" onclick="generateAudio()">
-          <div class="spinner"></div>
-          <span class="btn-text">🔊 生成语音</span>
-          <span class="btn-loading-text">正在生成中...</span>
-        </button>
-
         <div class="error-msg" id="errorMsg"></div>
 
         <div class="result-section" id="resultSection">
@@ -956,6 +1014,15 @@
             <audio id="audioPlayer" controls></audio>
             <button class="download-btn" onclick="downloadAudio()">⬇️ 下载音频</button>
           </div>
+        </div>
+
+        <!-- 生成按钮固定在底部 -->
+        <div class="generate-btn-fixed">
+          <button class="generate-btn" id="generateBtn" onclick="generateAudio()">
+            <div class="spinner"></div>
+            <span class="btn-text"> 生成语音</span>
+            <span class="btn-loading-text">正在生成中...</span>
+          </button>
         </div>
       </div>
 
@@ -1681,8 +1748,14 @@
       try {
         const method = newFav ? 'POST' : 'DELETE';
         const url = newFav ? 'api/voices/favorite' : `api/voices/favorite/${voiceId}`;
-        const res = await authFetch(url, { method });
-        if (!res.ok) throw new Error('操作失败');
+        const options = { method };
+        if (newFav) {
+          options.headers = { 'Content-Type': 'application/json' };
+          options.body = JSON.stringify({ voiceId });
+        }
+        const res = await authFetch(url, options);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '操作失败');
 
         voice.favorited = newFav;
         el.textContent = newFav ? '★' : '☆';
