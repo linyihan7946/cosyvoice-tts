@@ -75,6 +75,14 @@ function initTables() {
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS user_favorites (
+      user_id TEXT NOT NULL,
+      voice_id TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, voice_id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
     INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('free', 'max_voice_clones', '1');
     INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('free', 'daily_tts_limit', '10');
     INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('monthly', 'max_voice_clones', '5');
@@ -180,6 +188,26 @@ function deleteCustomVoice(voiceId) {
 
 function getAllCustomVoices() {
   return getDb().prepare('SELECT * FROM custom_voices ORDER BY created_at DESC').all();
+}
+
+// ===== 收藏操作 =====
+
+function getUserFavorites(userId) {
+  return getDb().prepare(
+    'SELECT voice_id FROM user_favorites WHERE user_id = ?'
+  ).all(userId).map(r => r.voice_id);
+}
+
+function addFavorite(userId, voiceId) {
+  getDb().prepare(
+    'INSERT OR IGNORE INTO user_favorites (user_id, voice_id) VALUES (?, ?)'
+  ).run(userId, voiceId);
+}
+
+function removeFavorite(userId, voiceId) {
+  getDb().prepare(
+    'DELETE FROM user_favorites WHERE user_id = ? AND voice_id = ?'
+  ).run(userId, voiceId);
 }
 
 // ===== 统计 =====
@@ -330,6 +358,9 @@ module.exports = {
   getAllCustomVoices,
   getSystemVoices,
   addSystemVoice,
+  getUserFavorites,
+  addFavorite,
+  removeFavorite,
   getStats,
   migrateFromJson,
   // 配额配置

@@ -35,6 +35,9 @@ const {
   getAllCustomVoices,
   getSystemVoices,
   addSystemVoice,
+  getUserFavorites,
+  addFavorite,
+  removeFavorite,
   getStats,
   migrateFromJson,
   // 配额相关
@@ -656,19 +659,47 @@ app.get(routePath('/api/auth/admin/usage'), authMiddleware, (req, res) => {
 // 获取音色列表（内置 + 当前用户的自定义音色）
 app.get(routePath('/api/voices'), optionalAuth, (req, res) => {
   let customVoices = [];
+  let favoriteIds = new Set();
   if (req.userId) {
     customVoices = getCustomVoicesByUserId(req.userId);
+    favoriteIds = new Set(getUserFavorites(req.userId));
   }
 
   // 系统音色：所有用户都可见
   const systemVoices = getSystemVoices();
 
+  const markFavorite = v => ({ ...v, favorited: favoriteIds.has(v.id) });
+
   const allVoices = [
-    ...BUILTIN_VOICES,
-    ...systemVoices.map(v => ({ ...v, type: 'system' })),
-    ...customVoices.map(v => ({ ...v, type: 'custom' })),
+    ...BUILTIN_VOICES.map(markFavorite),
+    ...systemVoices.map(v => markFavorite({ ...v, type: 'system' })),
+    ...customVoices.map(v => ({ ...v, type: 'custom', favorited: false })),
   ];
   res.json({ voices: allVoices });
+});
+
+// 收藏/取消收藏音色（仅内置和系统音色可收藏）
+app.post(routePath('/api/voices/favorite'), authMiddleware, (req, res) => {
+  const { voiceId } = req.body;
+  if (!voiceId) return res.status(400).json({ error: '请提供音色 ID' });
+
+  // 检查是否为内置或系统音色（不能收藏用户自己的克隆音色）
+  const isBuiltin = BUILTIN_VOICES.some(v => v.id === voiceId);
+  const customVoice = getCustomVoiceById(voiceId);
+  const isSystem = customVoice && customVoice.is_system;
+
+  if (!isBuiltin && !isSystem) {
+    return res.status(400).json({ error: '该音色不支持收藏' });
+  }
+
+  addFavorite(req.userId, voiceId);
+  res.json({ success: true, favorited: true });
+});
+
+app.delete(routePath('/api/voices/favorite/:voiceId'), authMiddleware, (req, res) => {
+  const { voiceId } = req.params;
+  removeFavorite(req.userId, voiceId);
+  res.json({ success: true, favorited: false });
 });
 
 // 语音合成接口

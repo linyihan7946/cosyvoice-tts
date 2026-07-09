@@ -379,6 +379,30 @@
     .form-group textarea::placeholder { color: #aaa; }
 
     /* 音色网格 */
+    .voice-filter-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .voice-filter-tab {
+      padding: 5px 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 16px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      color: #666;
+      transition: all 0.2s;
+      user-select: none;
+    }
+    .voice-filter-tab:hover { border-color: #667eea; color: #667eea; }
+    .voice-filter-tab.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      border-color: transparent;
+    }
+
     .voice-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -414,6 +438,19 @@
       background: #f0f0f0;
       color: #888;
     }
+    .voice-card .voice-fav {
+      position: absolute;
+      top: 3px;
+      left: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      opacity: 0.3;
+      transition: opacity 0.2s, transform 0.15s;
+      line-height: 1;
+      user-select: none;
+    }
+    .voice-card .voice-fav:hover { opacity: 0.7; transform: scale(1.2); }
+    .voice-card .voice-fav.active { opacity: 1; }
     .voice-card.custom .voice-type { background: #e8f5e9; color: #2e7d32; }
     .voice-card.system .voice-type { background: #e3f2fd; color: #1565c0; }
 
@@ -721,6 +758,10 @@
       }
       .admin-sub-tab { padding: 6px 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
 
+      /* 音色筛选标签 */
+      .voice-filter-tabs { gap: 4px; }
+      .voice-filter-tab { padding: 4px 10px; font-size: 11px; }
+
       /* 登录页 */
       .login-container { padding: 24px; border-radius: 16px; max-width: 100%; }
 
@@ -892,6 +933,12 @@
 
         <div class="form-group">
           <label>🎤 选择音色</label>
+          <div class="voice-filter-tabs">
+            <div class="voice-filter-tab active" data-filter="all" onclick="filterVoices('all')">全部</div>
+            <div class="voice-filter-tab" data-filter="favorite" onclick="filterVoices('favorite')">⭐ 收藏</div>
+            <div class="voice-filter-tab" data-filter="builtin" onclick="filterVoices('builtin')">内置</div>
+            <div class="voice-filter-tab" data-filter="custom" onclick="filterVoices('custom')">我的</div>
+          </div>
           <div class="voice-grid" id="voiceGrid"></div>
         </div>
 
@@ -1563,15 +1610,57 @@
     }
 
     // ===== 渲染音色网格 =====
+    let currentVoiceFilter = 'all';
+
+    function getFilteredVoices() {
+      switch (currentVoiceFilter) {
+        case 'favorite':
+          return voices.filter(v => v.favorited);
+        case 'builtin':
+          return voices.filter(v => v.type !== 'custom');
+        case 'custom':
+          return voices.filter(v => v.type === 'custom');
+        default:
+          return voices;
+      }
+    }
+
+    function filterVoices(filter) {
+      currentVoiceFilter = filter;
+      // 更新 tab 高亮
+      document.querySelectorAll('.voice-filter-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.filter === filter);
+      });
+      renderVoiceGrid();
+    }
+
     function renderVoiceGrid() {
       const grid = document.getElementById('voiceGrid');
-      grid.innerHTML = voices.map((v, i) => {
+      const filtered = getFilteredVoices();
+
+      if (filtered.length === 0) {
+        const emptyText = {
+          favorite: '暂无收藏的音色，点击 ⭐ 收藏喜欢的音色吧',
+          builtin: '暂无内置音色',
+          custom: '暂无自定义音色，去克隆一个吧',
+        }[currentVoiceFilter] || '暂无音色';
+        grid.innerHTML = `<div class="empty-hint" style="grid-column: 1/-1;">${emptyText}</div>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map((v, i) => {
         const typeClass = v.type === 'custom' ? 'custom' : '';
         const typeLabel = v.type === 'custom' ? '我的' : '内置';
+        // 仅内置/系统音色可收藏
+        const canFavorite = v.type !== 'custom';
+        const favStar = canFavorite
+          ? `<span class="voice-fav ${v.favorited ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${v.id}', this)">${v.favorited ? '★' : '☆'}</span>`
+          : '';
         return `
         <div class="voice-card ${typeClass} ${(selectedVoice && selectedVoice === v.id) || (!selectedVoice && i === 0) ? 'active' : ''}"
              data-voice="${v.id}"
              onclick="selectVoice('${v.id}', this)">
+          ${favStar}
           <span class="voice-type">${typeLabel}</span>
           <div class="voice-name">${v.name}</div>
           ${v.desc ? `<div class="voice-desc">${v.desc}</div>` : ''}
@@ -1579,8 +1668,32 @@
       `;
       }).join('');
 
-      if (voices.length > 0 && !selectedVoice) {
-        selectedVoice = voices[0].id;
+      if (filtered.length > 0 && !selectedVoice) {
+        selectedVoice = filtered[0].id;
+      }
+    }
+
+    async function toggleFavorite(voiceId, el) {
+      const voice = voices.find(v => v.id === voiceId);
+      if (!voice) return;
+
+      const newFav = !voice.favorited;
+      try {
+        const method = newFav ? 'POST' : 'DELETE';
+        const url = newFav ? 'api/voices/favorite' : `api/voices/favorite/${voiceId}`;
+        const res = await authFetch(url, { method });
+        if (!res.ok) throw new Error('操作失败');
+
+        voice.favorited = newFav;
+        el.textContent = newFav ? '★' : '☆';
+        el.classList.toggle('active', newFav);
+
+        // 如果当前在收藏筛选下且取消收藏，刷新列表
+        if (currentVoiceFilter === 'favorite' && !newFav) {
+          renderVoiceGrid();
+        }
+      } catch (e) {
+        alert('❌ ' + e.message);
       }
     }
 
