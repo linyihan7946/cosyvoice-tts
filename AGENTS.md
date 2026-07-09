@@ -55,6 +55,9 @@ cosyvoice-tts/
 │       └── api.test.js    # API 接口测试
 ├── frontend/              # 前端
 │   └── index.html         # 前端单页应用
+├── Dockerfile             # 生产镜像构建，安装 Node + UniSMS Python SDK
+├── docker-compose.yml     # 生产部署配置，SQLite 使用远程 ./data 目录持久化
+├── .dockerignore          # Docker 构建排除规则（禁止打包本地数据库）
 ├── .gitignore             # Git 忽略规则
 ├── README.md              # GitHub 项目说明
 └── agents.md              # 本文档（项目架构记录）
@@ -354,6 +357,7 @@ npm run test:coverage # 查看覆盖率
 | 2026-07-08 | **短信发送改为优先使用 UniSMS Python SDK**：新增 `backend/send_sms_unisdk.py`，后端 `sendSms()` 优先调用与 ai-personal-trainer 相同的 Python SDK 发送短信；仅当 SDK 不可用时才回退 REST API |
 | 2026-07-09 | **固定生成语音按钮位置**：将语音合成 Tab 的生成按钮改为视口底部固定操作栏，切换音色分类或列表高度变化时按钮不再上下跳动；内容区增加底部留白避免遮挡结果和音色列表 |
 | 2026-07-09 | **扩大音色列表区域**：语音合成 Tab 的音色网格改为响应式固定高度滚动区，音色较少的分类也会占据接近底部生成按钮的位置，减少中间空白 |
+| 2026-07-09 | **生产数据库持久化部署**：新增 Dockerfile、docker-compose.yml 和 .dockerignore；后端 SQLite 支持 `DB_PATH` 环境变量；生产部署默认把数据库写入远程部署目录 `./data/data.db`（容器内 `/app/data/data.db`），避免每次部署覆盖用户数据 |
 
 ---
 
@@ -369,9 +373,10 @@ npm run test:coverage # 查看覆盖率
 8. **认证**：所有 TTS/克隆接口需要 JWT 认证（Authorization: Bearer <token>），未登录返回 401
 9. **音色隔离**：每个用户只能看到/使用/删除自己的克隆音色，内置音色所有人可用
 10. **管理员**：通过 ADMIN_PHONES 环境变量配置，管理员可查看平台统计
-11. **数据存储**：用户、音色、配额配置、层级关系和用量数据存储在 SQLite（`backend/data.db`，含 5 张表：users, custom_voices, quota_config, user_tiers, usage_tracking），旧 custom_voices.json 在首次启动时自动迁移
+11. **数据存储**：用户、音色、配额配置、层级关系和用量数据存储在 SQLite；本地默认 `backend/data.db`，生产可通过 `DB_PATH` 指向持久化路径（docker-compose 默认 `/app/data/data.db`，绑定到远程部署目录 `./data`）；旧 custom_voices.json 在首次启动时自动迁移
 12. **短信发送**：UniSMS 逻辑需与 ai-personal-trainer 的 Python SDK 保持一致；鉴权参数放 URL Query，短信内容参数（to/signature/templateId/templateData）放 JSON Body；签名使用排序后的 Query + HMAC-SHA256 hex；发送成功需满足顶层 `code === "0"`，并兼容 `message === "Success"`、`data.code === "OK"` 或 `messages[].status === "sent"`；调试环境可返回 debug_code 作为验证码兜底
 13. **配额系统**：配额参数存储在 `quota_config` 表中（非 .env），支持运行时通过管理 API 动态修改无需重启；`-1` 表示无限；每日用量以 `date('now')` 为键，无需 cron 清理；管理员层级兼容 `ADMIN_PHONES` 环境变量（优先级最高）
 14. **短信兜底体验**：前端在 `sms_sent: true` 且响应包含 `debug_code` 时，可在成功提示中显示本地验证码；生产环境应设置 `NODE_ENV=production` 或关闭 `SHOW_DEBUG_CODE`，避免暴露验证码
 15. **重启服务**：每次修改后端代码（server.js, db.js, auth.js 等）后，必须先停掉旧服务（`taskkill /F /IM node.exe` 或关闭终端），再重启新服务（`cd backend && npm start`），否则修改不会生效
 16. **Python SDK 依赖**：短信发送优先调用 `backend/send_sms_unisdk.py`，运行环境需要可用的 `python` 命令和 `unisms`/`uni-sdk` Python 包；若 SDK 不可用，后端会自动回退 REST API；`NODE_ENV=test` 时会跳过真实短信发送
+17. **部署数据保护**：生产部署必须使用 `docker-compose.yml` 中的 `./data:/app/data` 或等效持久化挂载；不要把 `backend/data.db*` 打进镜像或上传覆盖线上运行时数据库
