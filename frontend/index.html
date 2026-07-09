@@ -415,6 +415,7 @@
       color: #888;
     }
     .voice-card.custom .voice-type { background: #e8f5e9; color: #2e7d32; }
+    .voice-card.system .voice-type { background: #e3f2fd; color: #1565c0; }
 
     /* 音色克隆区域 */
     .clone-section {
@@ -1564,15 +1565,19 @@
     // ===== 渲染音色网格 =====
     function renderVoiceGrid() {
       const grid = document.getElementById('voiceGrid');
-      grid.innerHTML = voices.map((v, i) => `
-        <div class="voice-card ${v.type === 'custom' ? 'custom' : ''} ${(selectedVoice && selectedVoice === v.id) || (!selectedVoice && i === 0) ? 'active' : ''}"
+      grid.innerHTML = voices.map((v, i) => {
+        const typeClass = v.type === 'custom' ? 'custom' : '';
+        const typeLabel = v.type === 'custom' ? '我的' : '内置';
+        return `
+        <div class="voice-card ${typeClass} ${(selectedVoice && selectedVoice === v.id) || (!selectedVoice && i === 0) ? 'active' : ''}"
              data-voice="${v.id}"
              onclick="selectVoice('${v.id}', this)">
-          <span class="voice-type">${v.type === 'custom' ? '我的' : '内置'}</span>
+          <span class="voice-type">${typeLabel}</span>
           <div class="voice-name">${v.name}</div>
-          <div class="voice-desc">${v.desc}</div>
+          ${v.desc ? `<div class="voice-desc">${v.desc}</div>` : ''}
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       if (voices.length > 0 && !selectedVoice) {
         selectedVoice = voices[0].id;

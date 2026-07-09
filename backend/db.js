@@ -40,9 +40,10 @@ function initTables() {
 
     CREATE TABLE IF NOT EXISTS custom_voices (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      user_id TEXT,
       name TEXT NOT NULL,
       desc TEXT NOT NULL DEFAULT '',
+      is_system INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
@@ -81,6 +82,19 @@ function initTables() {
     INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('admin', 'max_voice_clones', '100');
     INSERT OR IGNORE INTO quota_config (tier, key, value) VALUES ('admin', 'daily_tts_limit', '-1');
   `);
+
+  // 迁移：为现有数据库添加 is_system 列（如果不存在）
+  try {
+    const columns = db.prepare("PRAGMA table_info(custom_voices)").all();
+    const hasIsSystem = columns.some(col => col.name === 'is_system');
+    if (!hasIsSystem) {
+      db.exec('ALTER TABLE custom_voices ADD COLUMN is_system INTEGER NOT NULL DEFAULT 0');
+    }
+    // 创建索引（列存在后）
+    db.exec('CREATE INDEX IF NOT EXISTS idx_custom_voices_is_system ON custom_voices(is_system)');
+  } catch (e) {
+    // 忽略迁移错误
+  }
 }
 
 function newUuid() {
@@ -124,12 +138,33 @@ function deleteUser(userId) {
 
 function getCustomVoicesByUserId(userId) {
   return getDb().prepare(
-    'SELECT * FROM custom_voices WHERE user_id = ? ORDER BY created_at DESC'
+    'SELECT * FROM custom_voices WHERE user_id = ? AND is_system = 0 ORDER BY created_at DESC'
   ).all(userId);
 }
 
 function getCustomVoiceById(voiceId) {
   return getDb().prepare('SELECT * FROM custom_voices WHERE id = ?').get(voiceId);
+}
+
+function getSystemVoices() {
+  return getDb().prepare(
+    'SELECT * FROM custom_voices WHERE is_system = 1 ORDER BY created_at ASC'
+  ).all();
+}
+
+function addSystemVoice(voiceId, name, desc) {
+  const db = getDb();
+  // 确保 system 用户存在（用于关联系统音色）
+  const existing = db.prepare('SELECT id FROM users WHERE id = ?').get('system');
+  if (!existing) {
+    db.prepare(
+      'INSERT INTO users (id, phone, nickname, is_admin) VALUES (?, ?, ?, 0)'
+    ).run('system', '00000000000', '系统');
+  }
+  db.prepare(
+    'INSERT INTO custom_voices (id, user_id, name, desc, is_system) VALUES (?, ?, ?, ?, 1)'
+  ).run(voiceId, 'system', name, desc || '');
+  return getCustomVoiceById(voiceId);
 }
 
 function addCustomVoice(voiceId, userId, name, desc) {
@@ -293,6 +328,8 @@ module.exports = {
   addCustomVoice,
   deleteCustomVoice,
   getAllCustomVoices,
+  getSystemVoices,
+  addSystemVoice,
   getStats,
   migrateFromJson,
   // 配额配置

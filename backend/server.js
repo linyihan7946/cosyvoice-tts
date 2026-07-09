@@ -33,6 +33,8 @@ const {
   addCustomVoice,
   deleteCustomVoice,
   getAllCustomVoices,
+  getSystemVoices,
+  addSystemVoice,
   getStats,
   migrateFromJson,
   // 配额相关
@@ -658,8 +660,12 @@ app.get(routePath('/api/voices'), optionalAuth, (req, res) => {
     customVoices = getCustomVoicesByUserId(req.userId);
   }
 
+  // 系统音色：所有用户都可见
+  const systemVoices = getSystemVoices();
+
   const allVoices = [
     ...BUILTIN_VOICES,
+    ...systemVoices.map(v => ({ ...v, type: 'system' })),
     ...customVoices.map(v => ({ ...v, type: 'custom' })),
   ];
   res.json({ voices: allVoices });
@@ -679,7 +685,11 @@ app.post(routePath('/api/tts'), authMiddleware, checkQuota('tts'), async (req, r
   // 检查克隆音色所有权
   if (voice.startsWith('qwen-tts-vc-')) {
     const customVoice = getCustomVoiceById(voice);
-    if (!customVoice || customVoice.user_id !== req.userId) {
+    if (!customVoice) {
+      return res.status(404).json({ error: '音色不存在' });
+    }
+    // 系统音色所有用户都可用；普通克隆音色仅限本人
+    if (!customVoice.is_system && customVoice.user_id !== req.userId) {
       return res.status(403).json({ error: '无权使用此音色' });
     }
   }
@@ -744,7 +754,7 @@ app.post(routePath('/api/tts'), authMiddleware, checkQuota('tts'), async (req, r
 
 // 创建克隆音色
 app.post(routePath('/api/voice-clone'), authMiddleware, checkQuota('voice_clone'), async (req, res) => {
-  const { audioBase64, voiceName, audioText, language } = req.body;
+  let { audioBase64, voiceName, audioText, language } = req.body;
 
   if (!audioBase64 || !voiceName) {
     return res.status(400).json({ error: '请提供音频数据和音色名称' });
@@ -759,6 +769,11 @@ app.post(routePath('/api/voice-clone'), authMiddleware, checkQuota('voice_clone'
   const userVoices = getCustomVoicesByUserId(req.userId);
   if (userVoices.find(v => v.name === voiceName)) {
     return res.status(400).json({ error: `音色 "${voiceName}" 已存在，请换个名称` });
+  }
+
+  // 确保音频数据为 Data URI 或 URL 格式（DashScope API 要求）
+  if (!audioBase64.startsWith('data:') && !audioBase64.startsWith('http')) {
+    audioBase64 = `data:audio/wav;base64,${audioBase64}`;
   }
 
   try {
@@ -851,6 +866,126 @@ app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, r
     console.error('Delete Voice Error:', error);
     res.status(500).json({ error: '服务器错误: ' + error.message });
   }
+});
+
+// ============================================================
+//  系统音色克隆（管理员专用）
+// ============================================================
+
+// 管理员：通过音频文件路径克隆系统音色
+app.post(routePath('/api/auth/admin/clone-system-voice'), authMiddleware, async (req, res) => {
+  const user = getUserById(req.userId);
+  if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
+
+  const { audioFilePath, voiceName, audioBase64, audioText, language } = req.body;
+
+  if (!voiceName) {
+    return res.status(400).json({ error: '请提供音色名称' });
+  }
+
+  // 验证音色名称（允许中文）
+  if (voiceName.length > 20) {
+    return res.status(400).json({ error: '音色名称最长 20 字符' });
+  }
+
+  // 检查重名
+  const existingSystem = getSystemVoices().find(v => v.name === voiceName);
+  if (existingSystem) {
+    return res.status(400).json({ error: `系统音色 "${voiceName}" 已存在` });
+  }
+
+  let audioDataBase64 = audioBase64;
+
+  // 如果提供了文件路径，读取文件
+  if (audioFilePath) {
+    try {
+      const absPath = path.resolve(audioFilePath);
+      if (!fs.existsSync(absPath)) {
+        return res.status(400).json({ error: `音频文件不存在: ${absPath}` });
+      }
+      const fileBuffer = fs.readFileSync(absPath);
+      const ext = path.extname(absPath).toLowerCase();
+      const mimeMap = { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.flac': 'audio/flac', '.ogg': 'audio/ogg' };
+      const mime = mimeMap[ext] || 'audio/wav';
+      // 构造 Data URI（DashScope 要求 URL 或 Data URI 格式）
+      audioDataBase64 = `data:${mime};base64,${fileBuffer.toString('base64')}`;
+    } catch (e) {
+      return res.status(400).json({ error: '读取音频文件失败: ' + e.message });
+    }
+  } else if (audioDataBase64 && !audioDataBase64.startsWith('data:') && !audioDataBase64.startsWith('http')) {
+    // 如果是纯 base64（无 data: 前缀），自动补全为 Data URI
+    audioDataBase64 = `data:audio/wav;base64,${audioDataBase64}`;
+  }
+
+  if (!audioDataBase64) {
+    return res.status(400).json({ error: '请提供音频数据（audioBase64 或 audioFilePath）' });
+  }
+
+  try {
+    const response = await fetch(API_CONFIG.voiceCloneUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${API_CONFIG.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: API_CONFIG.voiceCloneModel,
+        input: {
+          action: 'create',
+          target_model: API_CONFIG.voiceCloneTargetModel,
+          preferred_name: voiceName.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 16),
+          audio: { data: audioDataBase64 },
+          ...(audioText ? { text: audioText } : {}),
+          ...(language ? { language } : {}),
+        },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('[System Voice Clone] API Error:', response.status, JSON.stringify(data));
+      const errorMsg = data.message || data.error?.message || `克隆失败 (${response.status})`;
+      return res.status(response.status).json({ error: errorMsg, detail: data });
+    }
+
+    const clonedVoiceId = data.output?.voice;
+    if (!clonedVoiceId) {
+      return res.status(500).json({ error: '克隆成功但未返回音色 ID', detail: data });
+    }
+
+    // 保存为系统音色（user_id = 'system', is_system = 1）
+    const newVoice = addSystemVoice(clonedVoiceId, voiceName, '');
+
+    console.log(`✅ 系统音色克隆成功: "${voiceName}" → ${clonedVoiceId}`);
+    res.json({ success: true, voice: newVoice });
+  } catch (error) {
+    console.error('[System Voice Clone] Error:', error);
+    res.status(500).json({ error: '服务器错误: ' + error.message });
+  }
+});
+
+// 管理员：列出所有系统音色
+app.get(routePath('/api/auth/admin/system-voices'), authMiddleware, (req, res) => {
+  const user = getUserById(req.userId);
+  if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
+  res.json(getSystemVoices());
+});
+
+// 管理员：删除系统音色
+app.delete(routePath('/api/auth/admin/system-voices/:voiceId'), authMiddleware, (req, res) => {
+  const user = getUserById(req.userId);
+  if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
+
+  const { voiceId } = req.params;
+  const voice = getCustomVoiceById(voiceId);
+
+  if (!voice) return res.status(404).json({ error: '音色不存在' });
+  if (!voice.is_system) return res.status(400).json({ error: '不是系统音色' });
+
+  deleteCustomVoice(voiceId);
+  console.log(`[Admin] 系统音色已删除: "${voice.name}" (${voiceId})`);
+  res.json({ success: true });
 });
 
 // ============================================================
