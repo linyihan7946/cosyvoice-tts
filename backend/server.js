@@ -420,6 +420,15 @@ if (process.env.NODE_ENV !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 
 const publicDir = path.join(__dirname, '..', 'frontend');
+// 禁止浏览器缓存 HTML/JS，确保部署后用户立即看到最新版本
+const noCacheHeaders = {
+  'Cache-Control': 'no-cache, no-store, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+function setNoCacheHeaders(res) {
+  res.set(noCacheHeaders);
+}
 if (PUBLIC_BASE_PATH) {
   app.get(PUBLIC_BASE_PATH, (req, res, next) => {
     if (req.path === PUBLIC_BASE_PATH) {
@@ -428,11 +437,19 @@ if (PUBLIC_BASE_PATH) {
     return next();
   });
   app.get(`${PUBLIC_BASE_PATH}/`, (req, res) => {
+    res.set(noCacheHeaders);
     res.sendFile(path.join(publicDir, 'index.html'));
   });
-  app.use(PUBLIC_BASE_PATH, express.static(publicDir, { redirect: false }));
+  app.use(PUBLIC_BASE_PATH, express.static(publicDir, { redirect: false, setHeaders: setNoCacheHeaders }));
 } else {
-  app.use(express.static(publicDir));
+  app.get('/', (req, res, next) => {
+    if (req.path === '/') {
+      res.set(noCacheHeaders);
+      return res.sendFile(path.join(publicDir, 'index.html'));
+    }
+    return next();
+  });
+  app.use(express.static(publicDir, { setHeaders: setNoCacheHeaders }));
 }
 
 // ============================================================
