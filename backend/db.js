@@ -152,13 +152,26 @@ async function initTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS voice_delete_log (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id VARCHAR(64) NOT NULL,
+      deleted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_voice_delete_log_user (user_id),
+      CONSTRAINT fk_voice_delete_log_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   const defaults = [
     ['free', 'max_voice_clones', '1'],
     ['free', 'daily_tts_limit', '10'],
+    ['free', 'daily_clone_limit', '1'],
     ['monthly', 'max_voice_clones', '5'],
     ['monthly', 'daily_tts_limit', '100'],
+    ['monthly', 'daily_clone_limit', '10'],
     ['admin', 'max_voice_clones', '100'],
     ['admin', 'daily_tts_limit', '-1'],
+    ['admin', 'daily_clone_limit', '-1'],
   ];
   for (const row of defaults) {
     await db.execute(
@@ -287,6 +300,43 @@ async function getCustomVoicesByUserId(userId) {
   if (memory) return memory.customVoices.filter(v => v.user_id === userId && !v.is_system).sort((a, b) => b.created_at.localeCompare(a.created_at));
   const rows = await query('SELECT * FROM custom_voices WHERE user_id = ? AND is_system = 0 ORDER BY created_at DESC', [userId]);
   return rows.map(normalizeRow);
+}
+
+// 获取用户今日克隆次数
+async function getTodayCloneCount(userId) {
+  if (memory) {
+    const today = new Date().toISOString().slice(0, 10);
+    return memory.customVoices.filter(v => v.user_id === userId && v.created_at && v.created_at.startsWith(today)).length;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await query(
+    'SELECT COUNT(*) as count FROM custom_voices WHERE user_id = ? AND is_system = 0 AND DATE(created_at) = ?',
+    [userId, today]
+  );
+  return rows[0].count || 0;
+}
+
+// 获取用户最后删除音色的时间
+async function getLastDeleteTime(userId) {
+  if (memory) return memory.lastDeleteTimes ? (memory.lastDeleteTimes[userId] || null) : null;
+  const rows = await query(
+    'SELECT deleted_at FROM voice_delete_log WHERE user_id = ? ORDER BY deleted_at DESC LIMIT 1',
+    [userId]
+  );
+  return rows[0] ? rows[0].deleted_at : null;
+}
+
+// 记录音色删除时间
+async function logVoiceDelete(userId) {
+  if (memory) {
+    if (!memory.lastDeleteTimes) memory.lastDeleteTimes = {};
+    memory.lastDeleteTimes[userId] = new Date().toISOString();
+    return;
+  }
+  await query(
+    'INSERT INTO voice_delete_log (user_id, deleted_at) VALUES (?, NOW())',
+    [userId]
+  );
 }
 
 async function getCustomVoiceById(voiceId) {
@@ -588,6 +638,9 @@ module.exports = {
   setUserAdmin,
   deleteUser,
   getCustomVoicesByUserId,
+  getTodayCloneCount,
+  getLastDeleteTime,
+  logVoiceDelete,
   getCustomVoiceById,
   addCustomVoice,
   deleteCustomVoice,

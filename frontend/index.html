@@ -2042,8 +2042,20 @@
 
         if (!response.ok) {
           if (response.status === 429) {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error + `（${errData.current}/${errData.limit}）`);
+            const errData = data;
+            // 冷却期提示
+            if (errData.remainingHours) {
+              throw new Error(`删除音色后需等待 ${errData.remainingHours} 小时才能再次克隆`);
+            }
+            // 每日上限提示
+            if (errData.resetTime) {
+              throw new Error(`${errData.error}（${errData.used}/${errData.limit}），${errData.resetTime}重置`);
+            }
+            // 并发上限提示
+            if (errData.current !== undefined) {
+              throw new Error(`${errData.error}（${errData.current}/${errData.limit}）`);
+            }
+            throw new Error(errData.error || '已达克隆上限');
           }
           throw new Error(data.error || `克隆失败 (${response.status})`);
         }

@@ -29,6 +29,9 @@ const {
   setUserAdmin,
   deleteUser,
   getCustomVoicesByUserId,
+  getTodayCloneCount,
+  getLastDeleteTime,
+  logVoiceDelete,
   getCustomVoiceById,
   addCustomVoice,
   deleteCustomVoice,
@@ -135,6 +138,7 @@ function checkQuota(resource) {
     const tier = await resolveUserTier(user);
 
     if (resource === 'voice_clone') {
+      // 检查当前克隆数上限
       const maxClones = await getQuotaValue(tier, 'max_voice_clones');
       if (maxClones > 0) {
         const currentClones = (await getCustomVoicesByUserId(req.userId)).length;
@@ -144,6 +148,35 @@ function checkQuota(resource) {
             current: currentClones,
             limit: maxClones,
             tier,
+          });
+        }
+      }
+
+      // 检查每日克隆次数限制
+      const dailyCloneLimit = await getQuotaValue(tier, 'daily_clone_limit');
+      if (dailyCloneLimit > 0) {
+        const todayClones = await getTodayCloneCount(req.userId);
+        if (todayClones >= dailyCloneLimit) {
+          return res.status(429).json({
+            error: '今日克隆次数已用完',
+            used: todayClones,
+            limit: dailyCloneLimit,
+            resetTime: '明天 00:00',
+          });
+        }
+      }
+
+      // 检查删除后冷却期（24 小时内不能重新克隆）
+      const lastDeleteTime = await getLastDeleteTime(req.userId);
+      if (lastDeleteTime) {
+        const lastDelete = new Date(lastDeleteTime);
+        const now = new Date();
+        const hoursSinceDelete = (now - lastDelete) / (1000 * 60 * 60);
+        if (hoursSinceDelete < 24) {
+          const remainingHours = Math.ceil(24 - hoursSinceDelete);
+          return res.status(429).json({
+            error: '冷却期内无法克隆',
+            remainingHours: remainingHours,
           });
         }
       }
@@ -894,6 +927,9 @@ app.delete(routePath('/api/voice-clone/:voiceId'), authMiddleware, async (req, r
 
     // 从数据库移除
     await deleteCustomVoice(voiceId);
+
+    // 记录删除时间，用于冷却期检查
+    await logVoiceDelete(req.userId);
 
     console.log(`✅ 音色已删除: "${voice.name}" (${voiceId})`);
     res.json({ success: true });
