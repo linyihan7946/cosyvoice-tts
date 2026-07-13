@@ -166,18 +166,20 @@ function checkQuota(resource) {
         }
       }
 
-      // 检查删除后冷却期（24 小时内不能重新克隆）
-      const lastDeleteTime = await getLastDeleteTime(req.userId);
-      if (lastDeleteTime) {
-        const lastDelete = new Date(lastDeleteTime);
-        const now = new Date();
-        const hoursSinceDelete = (now - lastDelete) / (1000 * 60 * 60);
-        if (hoursSinceDelete < 24) {
-          const remainingHours = Math.ceil(24 - hoursSinceDelete);
-          return res.status(429).json({
-            error: '冷却期内无法克隆',
-            remainingHours: remainingHours,
-          });
+      // 检查删除后冷却期（24 小时内不能重新克隆，管理员豁免）
+      if (!user.is_admin) {
+        const lastDeleteTime = await getLastDeleteTime(req.userId);
+        if (lastDeleteTime) {
+          const lastDelete = new Date(lastDeleteTime);
+          const now = new Date();
+          const hoursSinceDelete = (now - lastDelete) / (1000 * 60 * 60);
+          if (hoursSinceDelete < 24) {
+            const remainingHours = Math.ceil(24 - hoursSinceDelete);
+            return res.status(429).json({
+              error: '冷却期内无法克隆',
+              remainingHours: remainingHours,
+            });
+          }
         }
       }
     }
