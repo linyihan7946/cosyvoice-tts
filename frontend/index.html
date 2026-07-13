@@ -443,6 +443,15 @@
       transition: opacity 0.2s;
     }
     .result-page-footer .download-btn:hover { opacity: 0.9; }
+    .download-hint {
+      display: none;
+      margin-top: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #666;
+      text-align: center;
+    }
+    .download-hint.show { display: block; }
 
     .generate-btn-fixed {
       position: fixed;
@@ -1142,7 +1151,8 @@
   </div>
   <div class="result-page-footer">
     <audio id="audioPlayer" controls></audio>
-    <button class="download-btn" onclick="downloadAudio()">⬇️ 下载配音</button>
+    <button class="download-btn" id="downloadAudioBtn" onclick="downloadAudio()">⬇️ 下载配音</button>
+    <div class="download-hint" id="downloadHint"></div>
       </div></div>
 </div>
 
@@ -1306,6 +1316,9 @@
     let voices = [];
     let selectedVoice = '';
     let audioBlob = null;
+    let generatedAudioUrl = '';
+    let generatedDownloadUrl = '';
+    let generatedAudioFileName = '';
     let uploadedAudioBase64 = null;
     let quotaData = null;
 
@@ -2115,6 +2128,12 @@
 
       errorMsg.classList.remove('show');
       resultPage.classList.remove('show');
+      document.getElementById('downloadHint').classList.remove('show');
+      document.getElementById('downloadHint').textContent = '';
+      audioBlob = null;
+      generatedAudioUrl = '';
+      generatedDownloadUrl = '';
+      generatedAudioFileName = '';
 
       if (!text) { showError('请输入文案内容'); return; }
       if (!selectedVoice) { showError('请选择音色'); return; }
@@ -2127,7 +2146,7 @@
         const response = await authFetch('api/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice: selectedVoice }),
+          body: JSON.stringify({ text, voice: selectedVoice, returnUrl: true }),
         });
 
         if (!response.ok) {
@@ -2138,9 +2157,23 @@
           throw new Error(errorData.error || `请求失败 (${response.status})`);
         }
 
-        audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        document.getElementById('audioPlayer').src = audioUrl;
+        const responseType = response.headers.get('content-type') || '';
+        if (responseType.includes('application/json')) {
+          const result = await response.json();
+          generatedAudioUrl = result.audioUrl || '';
+          generatedDownloadUrl = result.downloadUrl || generatedAudioUrl;
+          generatedAudioFileName = result.filename || `tts_${Date.now()}.wav`;
+          audioBlob = null;
+          document.getElementById('audioPlayer').src = generatedAudioUrl;
+        } else {
+          audioBlob = await response.blob();
+          generatedAudioUrl = URL.createObjectURL(audioBlob);
+          generatedDownloadUrl = '';
+          generatedAudioFileName = `tts_${Date.now()}.wav`;
+          document.getElementById('audioPlayer').src = generatedAudioUrl;
+        }
+
+        updateDownloadButtonForBrowser();
         // 将文案内容填入结果页面的文本框
         document.getElementById('resultTextDisplay').value = text;
         resultPage.classList.add('show');
@@ -2160,16 +2193,49 @@
     }
 
     // ===== 下载配音 =====
+    function isWeChatBrowser() {
+      return /MicroMessenger/i.test(navigator.userAgent || '');
+    }
+
+    function updateDownloadButtonForBrowser() {
+      const btn = document.getElementById('downloadAudioBtn');
+      const hint = document.getElementById('downloadHint');
+      if (isWeChatBrowser()) {
+        btn.textContent = '▶️ 打开音频';
+        hint.textContent = '微信内置浏览器会拦截直接下载，点击后将打开音频页面，可播放并通过右上角菜单保存或转发。';
+        hint.classList.add('show');
+      } else {
+        btn.textContent = '⬇️ 下载配音';
+        hint.classList.remove('show');
+        hint.textContent = '';
+      }
+    }
+
     function downloadAudio() {
-      if (!audioBlob) return;
-      const url = URL.createObjectURL(audioBlob);
+      if (!generatedAudioUrl && !audioBlob) return;
+
+      if (isWeChatBrowser()) {
+        const audioPageUrl = generatedAudioUrl || document.getElementById('audioPlayer').src;
+        const opened = window.open(audioPageUrl, '_blank');
+        if (!opened) window.location.href = audioPageUrl;
+        return;
+      }
+
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `qwen3_tts_${Date.now()}.wav`;
+      let revokeUrl = '';
+      if (generatedDownloadUrl) {
+        a.href = generatedDownloadUrl;
+      } else if (audioBlob) {
+        revokeUrl = URL.createObjectURL(audioBlob);
+        a.href = revokeUrl;
+      } else {
+        a.href = generatedAudioUrl;
+      }
+      a.download = generatedAudioFileName || `tts_${Date.now()}.wav`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (revokeUrl) URL.revokeObjectURL(revokeUrl);
     }
 
     // ===== 消息提示 =====
@@ -2225,6 +2291,3 @@
   </script>
 </body>
 </html>
-
-
-

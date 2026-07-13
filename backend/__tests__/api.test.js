@@ -296,6 +296,25 @@ describe('API - TTS 配额检查', () => {
     // 不会返回 429（可能返回 200 或其他因为 mock）
     expect(res.status).not.toBe(429);
   });
+
+  test('TTS 可返回微信浏览器可打开的真实音频链接', async () => {
+    const user = await db.createUser('13800138000', '测试');
+    const token = createToken(user.id);
+
+    const res = await request(app)
+      .post('/api/tts')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ text: '测试文本', voice: 'Cherry', returnUrl: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('audioUrl');
+    expect(res.body).toHaveProperty('downloadUrl');
+    expect(res.body.audioUrl).toMatch(/^\/api\/tts-audio\//);
+
+    const audioRes = await request(app).get(res.body.audioUrl);
+    expect(audioRes.status).toBe(200);
+    expect(audioRes.headers['content-type']).toContain('audio/wav');
+  });
 });
 
 describe('API - 音色克隆配额检查', () => {

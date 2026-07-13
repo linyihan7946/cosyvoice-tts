@@ -166,14 +166,34 @@ cosyvoice-tts/
 
 请求体：
 ```json
-{ "text": "文本内容", "voice": "Cherry" }
+{ "text": "文本内容", "voice": "Cherry", "returnUrl": true }
 ```
 
 自动检测音色类型：
 - 内置音色 → 使用 `qwen3-tts-flash` 模型
 - 克隆音色（voice 以 `qwen-tts-vc-` 开头）→ 使用 `qwen3-tts-vc-2026-01-22` 模型
 
-响应：直接返回 WAV 音频二进制数据（`audio/wav`）。
+默认响应：直接返回 WAV 音频二进制数据（`audio/wav`）。
+
+当 `returnUrl: true` 时返回 JSON，供微信浏览器等不支持 `Blob download` 的环境使用：
+```json
+{
+  "success": true,
+  "audioUrl": "/api/tts-audio/xxx",
+  "downloadUrl": "/api/tts-audio/xxx/download",
+  "filename": "tts_1783074642000.wav",
+  "contentType": "audio/wav",
+  "expiresIn": 1800
+}
+```
+
+### GET /api/tts-audio/:id
+
+打开临时生成的音频，`Content-Disposition: inline`，适合微信内置浏览器直接播放。
+
+### GET /api/tts-audio/:id/download
+
+下载临时生成的音频，`Content-Disposition: attachment`，适合普通浏览器下载。
 
 ### POST /api/voice-clone
 
@@ -360,6 +380,7 @@ npm run test:coverage # 查看覆盖率
 | 2026-07-09 | **数据库切换到 MySQL**：后端数据库层从 SQLite/better-sqlite3 改为 MySQL/mysql2；新增 `DATABASE_URL`/`MYSQL_*` 环境变量配置；测试环境通过 `db.resetDb(':memory:')` 使用内存库，不依赖真实 MySQL；旧 SQLite 数据不迁移 |
 | 2026-07-09 | **新增本地内存库兜底**：开发环境可设置 `USE_MEMORY_DB=true` 临时使用内存数据库启动页面；该开关在 `NODE_ENV=production` 下无效，线上仍强制使用 MySQL，避免部署数据丢失 |
 | 2026-07-09 | **修复 Windows .env 解析**：后端读取 `.env` 时先 `trim()` 再匹配，并支持数字/下划线变量名，避免 CRLF 行尾导致 `MYSQL_*`、短信和 API Key 等配置无法加载 |
+| 2026-07-13 | **优化微信浏览器音频下载**：`POST /api/tts` 支持 `returnUrl: true` 返回临时真实音频链接；新增 `/api/tts-audio/:id` inline 播放和 `/download` 附件下载；前端在微信内置浏览器中改为打开音频页面，避免 `Blob URL + download` 被微信拦截 |
 
 ---
 
@@ -383,3 +404,4 @@ npm run test:coverage # 查看覆盖率
 16. **Python SDK 依赖**：短信发送优先调用 `backend/send_sms_unisdk.py`，运行环境需要可用的 `python` 命令和 `unisms`/`uni-sdk` Python 包；若 SDK 不可用，后端会自动回退 REST API；`NODE_ENV=test` 时会跳过真实短信发送
 17. **部署数据保护**：生产部署必须保留 `docker-compose.yml` 中的 `cosyvoice_mysql_data` 命名卷或等效 MySQL 持久化存储；常规 `docker compose up -d --build` 会保留数据，禁止在没有备份时执行 `docker compose down -v`、删除 Docker volume、重建 MySQL 数据目录或用空库覆盖线上库
 18. **环境变量解析**：`.env` 支持 Windows CRLF 行尾；新增配置项时保持 `KEY=value` 格式即可，后端会先去除行首尾空白再解析
+19. **微信下载兼容**：微信内置浏览器会拦截 `Blob URL` 或 `a.download` 文件下载；语音生成前端应使用 `returnUrl: true` 获取真实音频链接，微信中打开 `/api/tts-audio/:id` 播放/保存，普通浏览器使用 `/download` 下载

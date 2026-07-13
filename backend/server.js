@@ -233,6 +233,8 @@ const BUILTIN_VOICES = [
 const codeStore = new Map(); // phone -> { code, expiresAt }
 
 const CODE_EXPIRE_MS = 5 * 60 * 1000; // 5 分钟过期
+const GENERATED_AUDIO_TTL_MS = 30 * 60 * 1000; // 临时音频链接 30 分钟有效
+const generatedAudioStore = new Map(); // id -> { buffer, contentType, filename, expiresAt }
 
 function generateCode() {
   // 6 位数字验证码，首位非零
@@ -265,6 +267,44 @@ const codeCleanupTimer = setInterval(() => {
   }
 }, 60 * 1000);
 if (typeof codeCleanupTimer.unref === 'function') codeCleanupTimer.unref();
+
+const audioCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [id, entry] of generatedAudioStore) {
+    if (now > entry.expiresAt) generatedAudioStore.delete(id);
+  }
+}, 5 * 60 * 1000);
+if (typeof audioCleanupTimer.unref === 'function') audioCleanupTimer.unref();
+
+function storeGeneratedAudio(buffer, contentType, ext) {
+  const id = crypto.randomBytes(18).toString('hex');
+  const safeExt = ext === 'mp3' ? 'mp3' : 'wav';
+  const filename = `tts_${Date.now()}.${safeExt}`;
+  generatedAudioStore.set(id, {
+    buffer,
+    contentType,
+    filename,
+    expiresAt: Date.now() + GENERATED_AUDIO_TTL_MS,
+  });
+  return { id, filename };
+}
+
+function sendGeneratedAudio(req, res, asAttachment = false) {
+  const entry = generatedAudioStore.get(req.params.id);
+  if (!entry || Date.now() > entry.expiresAt) {
+    if (entry) generatedAudioStore.delete(req.params.id);
+    return res.status(404).send('音频链接已过期，请重新生成');
+  }
+
+  res.set({
+    'Content-Type': entry.contentType,
+    'Content-Length': entry.buffer.length,
+    'Content-Disposition': `${asAttachment ? 'attachment' : 'inline'}; filename="${entry.filename}"`,
+    'Cache-Control': 'private, max-age=1800',
+    'Accept-Ranges': 'bytes',
+  });
+  return res.send(entry.buffer);
+}
 
 // ============================================================
 //  短信发送（UniSMS）
@@ -758,9 +798,17 @@ app.delete(routePath('/api/voices/favorite/:voiceId'), authMiddleware, async (re
   res.json({ success: true, favorited: false });
 });
 
+app.get(routePath('/api/tts-audio/:id'), (req, res) => {
+  sendGeneratedAudio(req, res, false);
+});
+
+app.get(routePath('/api/tts-audio/:id/download'), (req, res) => {
+  sendGeneratedAudio(req, res, true);
+});
+
 // 语音合成接口
 app.post(routePath('/api/tts'), authMiddleware, checkQuota('tts'), async (req, res) => {
-  let { text, voice } = req.body;
+  let { text, voice, returnUrl } = req.body;
 
   if (!text || !voice) {
     return res.status(400).json({ error: '请提供文本和音色' });
@@ -823,6 +871,23 @@ app.post(routePath('/api/tts'), authMiddleware, checkQuota('tts'), async (req, r
     const audioBuffer = await audioRes.buffer();
     const urlExt = audioUrl.split('?')[0].split('.').pop().toLowerCase();
     const contentType = urlExt === 'wav' ? 'audio/wav' : 'audio/mpeg';
+
+    if (returnUrl) {
+      const ext = contentType === 'audio/wav' ? 'wav' : 'mp3';
+      const storedAudio = storeGeneratedAudio(audioBuffer, contentType, ext);
+
+      // TTS 成功后递增用量
+      await incrementTtsUsage(req.userId);
+
+      return res.json({
+        success: true,
+        audioUrl: routePath(`/api/tts-audio/${storedAudio.id}`),
+        downloadUrl: routePath(`/api/tts-audio/${storedAudio.id}/download`),
+        filename: storedAudio.filename,
+        contentType,
+        expiresIn: GENERATED_AUDIO_TTL_MS / 1000,
+      });
+    }
 
     res.set({ 'Content-Type': contentType, 'Content-Length': audioBuffer.length });
     res.send(audioBuffer);
