@@ -351,6 +351,7 @@ npm run test:coverage # 查看覆盖率
 - **db.js 测试**：使用 `:memory:` 内存数据库，每个测试前重置，确保数据隔离
 - **auth.js 测试**：直接测试函数输入输出，中间件使用 mock 对象
 - **API 测试**：使用 supertest 发送 HTTP 请求，mock 外部 API（DashScope、UniSMS）
+- **强制要求：开发完新的功能或者功能修改后，必须新增或更新对应的单元测试**
 
 ### 注意事项
 
