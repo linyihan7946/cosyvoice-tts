@@ -385,6 +385,36 @@ async function addSystemVoice(voiceId, name, desc) {
   return getCustomVoiceById(voiceId);
 }
 
+async function upsertSystemVoice(voiceId, name, desc) {
+  if (memory) {
+    if (!memory.users.find(u => u.id === 'system')) {
+      memory.users.push({ id: 'system', phone: '00000000000', nickname: '系统', is_admin: 0, created_at: new Date().toISOString() });
+    }
+    const existing = memory.customVoices.find(v => v.id === voiceId);
+    if (existing) {
+      Object.assign(existing, { user_id: 'system', name, desc: desc || '', is_system: 1 });
+    } else {
+      memory.customVoices.push({ id: voiceId, user_id: 'system', name, desc: desc || '', is_system: 1, created_at: new Date().toISOString() });
+    }
+    return getCustomVoiceById(voiceId);
+  }
+  await query(
+    'INSERT IGNORE INTO users (id, phone, nickname, is_admin) VALUES (?, ?, ?, 0)',
+    ['system', '00000000000', '系统']
+  );
+  await query(
+    `INSERT INTO custom_voices (id, user_id, name, \`desc\`, is_system)
+     VALUES (?, ?, ?, ?, 1)
+     ON DUPLICATE KEY UPDATE
+       user_id = VALUES(user_id),
+       name = VALUES(name),
+       \`desc\` = VALUES(\`desc\`),
+       is_system = 1`,
+    [voiceId, 'system', name, desc || '']
+  );
+  return getCustomVoiceById(voiceId);
+}
+
 async function addCustomVoice(voiceId, userId, name, desc) {
   if (memory) {
     memory.customVoices.push({ id: voiceId, user_id: userId, name, desc: desc || '自定义克隆音色', is_system: 0, created_at: new Date().toISOString() });
@@ -720,6 +750,7 @@ module.exports = {
   getAllCustomVoices,
   getSystemVoices,
   addSystemVoice,
+  upsertSystemVoice,
   getUserFavorites,
   addFavorite,
   removeFavorite,

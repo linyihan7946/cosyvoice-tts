@@ -38,6 +38,7 @@ const {
   getAllCustomVoices,
   getSystemVoices,
   addSystemVoice,
+  upsertSystemVoice,
   getUserFavorites,
   addFavorite,
   removeFavorite,
@@ -458,9 +459,44 @@ async function sendSms(phone, code) {
 //  数据迁移：从 custom_voices.json 迁移到 MySQL
 // ============================================================
 const CUSTOM_VOICES_JSON = path.join(__dirname, 'custom_voices.json');
+const SYSTEM_VOICES_JSON = path.join(__dirname, 'system_voices.json');
+
+function readSystemVoiceManifest(filePath = SYSTEM_VOICES_JSON) {
+  if (!fs.existsSync(filePath)) return [];
+  const voices = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  if (!Array.isArray(voices)) throw new Error('system_voices.json 必须是数组');
+  for (const voice of voices) {
+    if (!voice || typeof voice.id !== 'string' || typeof voice.name !== 'string' || !voice.id || !voice.name) {
+      throw new Error('system_voices.json 中每个音色都必须包含 id 和 name');
+    }
+  }
+  return voices;
+}
+
+async function syncSystemVoicesFromManifest(filePath = SYSTEM_VOICES_JSON) {
+  const voices = readSystemVoiceManifest(filePath);
+  for (const voice of voices) {
+    await upsertSystemVoice(voice.id, voice.name, voice.desc || '');
+  }
+  return voices.length;
+}
+
+async function saveSystemVoiceManifest(filePath = SYSTEM_VOICES_JSON) {
+  const voices = (await getSystemVoices()).map(({ id, name, desc }) => ({ id, name, desc: desc || '' }));
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(voices, null, 2)}\n`, 'utf8');
+  fs.renameSync(tempPath, filePath);
+  return voices.length;
+}
+
 if (process.env.NODE_ENV !== 'test') {
   migrateFromJson(CUSTOM_VOICES_JSON).catch(err => {
     console.error('[DB] custom_voices.json 迁移失败:', err.message);
+  });
+  syncSystemVoicesFromManifest().then(count => {
+    console.log(`[DB] 已同步系统音色清单: ${count} 种`);
+  }).catch(err => {
+    console.error('[DB] system_voices.json 同步失败:', err.message);
   });
 }
 
@@ -1177,6 +1213,12 @@ app.post(routePath('/api/auth/admin/clone-system-voice'), authMiddleware, async 
     // 保存为系统音色（user_id = 'system', is_system = 1）
     const newVoice = await addSystemVoice(clonedVoiceId, voiceName, '');
 
+    try {
+      await saveSystemVoiceManifest();
+    } catch (manifestError) {
+      console.warn('[System Voice Clone] 更新 system_voices.json 失败:', manifestError.message);
+    }
+
     console.log(`✅ 系统音色克隆成功: "${voiceName}" → ${clonedVoiceId}`);
     res.json({ success: true, voice: newVoice });
   } catch (error) {
@@ -1204,6 +1246,11 @@ app.delete(routePath('/api/auth/admin/system-voices/:voiceId'), authMiddleware, 
   if (!voice.is_system) return res.status(400).json({ error: '不是系统音色' });
 
   await deleteCustomVoice(voiceId);
+  try {
+    await saveSystemVoiceManifest();
+  } catch (manifestError) {
+    console.warn('[Admin] 更新 system_voices.json 失败:', manifestError.message);
+  }
   console.log(`[Admin] 系统音色已删除: "${voice.name}" (${voiceId})`);
   res.json({ success: true });
 });

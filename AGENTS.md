@@ -48,6 +48,7 @@ cosyvoice-tts/
 │   ├── .env               # API Key 配置（禁止提交）
 │   ├── package.json       # 后端依赖
 │   ├── custom_voices.json
+│   ├── system_voices.json # 可随代码部署的系统音色清单
 │   └── __tests__/         # 单元测试
 │       ├── db.test.js     # 数据库层测试
 │       ├── auth.test.js   # 认证模块测试
@@ -321,20 +322,23 @@ cosyvoice-tts/
 
 ---
 
-## 音色克隆存储
+## 音色存储与部署同步
 
-自定义音色持久化存储在 `custom_voices.json` 文件中：
+用户克隆音色和系统音色均持久化在 MySQL 的 `custom_voices` 表中。`custom_voices.json` 仅用于兼容旧版本首次迁移。
+
+管理员在本地新增或删除系统音色后，后端会同步更新 `backend/system_voices.json`：
 
 ```json
 [
   {
     "id": "qwen-tts-vc-myvoice-voice-...",
-    "name": "myvoice",
-    "desc": "自定义克隆音色",
-    "createdAt": "2026-07-03T02:13:41.542Z"
+    "name": "系统音色名称",
+    "desc": ""
   }
 ]
 ```
+
+`system_voices.json` 是普通项目文件，一键部署按现有通用目录同步规则会自然把它随代码上传，无需修改或定制 `one-click-deployment`。服务启动时按音色 ID 执行合并写入，只新增或更新系统音色，不清空 `custom_voices` 表，因此不会覆盖线上用户音色及其他 MySQL 数据。
 
 ---
 
@@ -407,6 +411,8 @@ npm run test:coverage # 查看覆盖率
 | 2026-07-14 | **新增问题反馈模块**：新增 `feedback` 表（id, user_id, content, contact, status, created_at）；新增 `POST /api/feedback` 用户提交反馈接口、`GET /api/auth/admin/feedback` 管理员查看反馈列表、`PUT /api/auth/admin/feedback/:id` 更新状态、`DELETE /api/auth/admin/feedback/:id` 删除反馈；反馈状态支持 pending/processing/resolved/closed；前端用户栏新增「问题反馈」按钮和弹窗；管理员面板新增「问题反馈」子标签，支持按状态筛选、标记处理、删除 |
 | 2026-07-14 | **音色克隆新增录音功能**：克隆页面顶部新增录音区域（放在文件上传前面），使用 MediaRecorder API 录制麦克风音频，最长 20 秒，带倒计时显示；录音完成后可试听、重新录制或使用；15~20 秒时长校验与文件上传一致 |
 | 2026-07-14 | **管理员删除音色免冷却**：管理员删除克隆音色后不再受 24 小时冷却期限制，可立即重新克隆 |
+| 2026-07-14 | **克隆音频入口改为左右布局**：录音和上传音频改为等高双列展示，窄屏仍保持并排并压缩内部控件 |
+| 2026-07-14 | **系统音色随一键部署同步**：新增 `backend/system_voices.json` 部署清单；服务启动时以合并方式写入 MySQL；管理员新增/删除系统音色后自动更新清单；清单作为普通项目文件沿用一键部署的通用目录同步，无需定制部署工具，也不覆盖线上用户数据 |
 
 ---
 
@@ -431,3 +437,4 @@ npm run test:coverage # 查看覆盖率
 17. **部署数据保护**：生产部署必须保留 `docker-compose.yml` 中的 `cosyvoice_mysql_data` 命名卷或等效 MySQL 持久化存储；常规 `docker compose up -d --build` 会保留数据，禁止在没有备份时执行 `docker compose down -v`、删除 Docker volume、重建 MySQL 数据目录或用空库覆盖线上库
 18. **环境变量解析**：`.env` 支持 Windows CRLF 行尾；新增配置项时保持 `KEY=value` 格式即可，后端会先去除行首尾空白再解析
 19. **微信下载兼容**：微信内置浏览器会拦截 `Blob URL` 或 `a.download` 文件下载；语音生成前端应使用 `returnUrl: true` 获取真实音频链接，微信中打开 `/api/tts-audio/:id` 播放/保存，普通浏览器使用 `/download` 下载
+20. **系统音色部署同步**：`backend/system_voices.json` 是系统音色的可部署清单；管理员新增/删除系统音色后要保持清单同步；该文件由通用目录同步自然上传，不要在 `one-click-deployment` 中增加业务定制；服务启动只按 ID 合并系统音色，禁止为了同步清单而清空 `custom_voices` 表或覆盖线上 MySQL 数据目录

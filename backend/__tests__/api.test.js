@@ -124,6 +124,16 @@ describe('API - 音色接口', () => {
       expect(custom).toHaveLength(1);
       expect(custom[0].name).toBe('myvoice');
     });
+
+    test('系统音色对未登录用户可见', async () => {
+      await db.upsertSystemVoice('system-voice-001', '部署音色', '');
+      const res = await request(app).get('/api/voices');
+
+      expect(res.status).toBe(200);
+      expect(res.body.voices).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'system-voice-001', name: '部署音色', type: 'system' }),
+      ]));
+    });
   });
 });
 

@@ -769,14 +769,40 @@
       margin-bottom: 20px;
     }
 
+    .clone-audio-inputs {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+      align-items: stretch;
+      margin-bottom: 16px;
+    }
+
+    .clone-audio-option {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .clone-audio-option-title {
+      color: #555;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
     /* 录音区域 */
     .record-area {
       background: #fff;
       border: 2px solid #e8e8e8;
       border-radius: 12px;
-      padding: 24px;
+      padding: 18px 10px;
       text-align: center;
-      margin-bottom: 16px;
+      min-height: 190px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       transition: all 0.2s;
     }
 
@@ -841,11 +867,12 @@
       display: flex;
       gap: 10px;
       justify-content: center;
+      flex-wrap: wrap;
       margin-top: 10px;
     }
 
     .record-actions button {
-      padding: 8px 20px;
+      padding: 8px 10px;
       border: none;
       border-radius: 8px;
       font-size: 13px;
@@ -870,9 +897,11 @@
 
     .input-divider {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 12px;
-      margin: 20px 0;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 28px;
       color: #aaa;
       font-size: 13px;
     }
@@ -880,20 +909,25 @@
     .input-divider::before,
     .input-divider::after {
       content: '';
+      width: 1px;
       flex: 1;
-      height: 1px;
       background: #e8e8e8;
     }
 
     .upload-area {
       border: 2px dashed #ccc;
       border-radius: 12px;
-      padding: 30px;
+      padding: 18px 10px;
       text-align: center;
       cursor: pointer;
       transition: all 0.2s;
       background: #fff;
-      margin-bottom: 16px;
+      min-height: 190px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
 
     .upload-area:hover { border-color: #667eea; background: #fafafe; }
@@ -1450,29 +1484,36 @@
           <h3>🎤 克隆你的声音</h3>
           <p class="subtitle">录制或上传一段 15~20 秒的语音，即可克隆出你的专属音色</p>
 
-          <!-- 录音区域 -->
-          <div class="record-area" id="recordArea">
-            <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
-              <div class="record-dot"></div>
-            </button>
-            <div class="record-timer" id="recordTimer">00:00</div>
-            <div class="record-hint" id="recordHint">点击按钮开始录音（最长 20 秒）</div>
-            <div class="record-playback" id="recordPlayback" style="display:none">
-              <audio id="recordedAudio" controls></audio>
-              <div class="record-actions">
-                <button class="re-record-btn" onclick="resetRecording()">🔄 重新录制</button>
-                <button class="use-record-btn" onclick="useRecording()">✅ 使用这段录音</button>
+          <div class="clone-audio-inputs">
+            <div class="clone-audio-option">
+              <div class="clone-audio-option-title">直接录音</div>
+              <div class="record-area" id="recordArea">
+                <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+                  <div class="record-dot"></div>
+                </button>
+                <div class="record-timer" id="recordTimer">00:00</div>
+                <div class="record-hint" id="recordHint">点击按钮开始录音（最长 20 秒）</div>
+                <div class="record-playback" id="recordPlayback" style="display:none">
+                  <audio id="recordedAudio" controls></audio>
+                  <div class="record-actions">
+                    <button class="re-record-btn" onclick="resetRecording()">🔄 重新录制</button>
+                    <button class="use-record-btn" onclick="useRecording()">✅ 使用这段录音</button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="input-divider">或上传音频文件</div>
+            <div class="input-divider">或</div>
 
-          <div class="upload-area" id="uploadArea" onclick="document.getElementById('audioFile').click()">
-            <div class="icon">📁</div>
-            <div class="text">点击或拖拽上传音频文件</div>
-            <div class="file-info" id="fileInfo"></div>
-            <input type="file" id="audioFile" accept="audio/wav,audio/mp3,audio/mpeg,audio/mp4,audio/wav" onchange="handleFileSelect(event)">
+            <div class="clone-audio-option">
+              <div class="clone-audio-option-title">上传音频</div>
+              <div class="upload-area" id="uploadArea" onclick="document.getElementById('audioFile').click()">
+                <div class="icon">📁</div>
+                <div class="text">点击或拖拽上传音频文件</div>
+                <div class="file-info" id="fileInfo"></div>
+                <input type="file" id="audioFile" accept="audio/wav,audio/mp3,audio/mpeg,audio/mp4,audio/wav" onchange="handleFileSelect(event)">
+              </div>
+            </div>
           </div>
 
           <div class="clone-form-row">

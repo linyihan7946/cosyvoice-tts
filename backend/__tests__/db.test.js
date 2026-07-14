@@ -106,6 +106,26 @@ describe('Database - 音色操作', () => {
     const all = await db.getAllCustomVoices();
     expect(all).toHaveLength(2);
   });
+
+  test('upsertSystemVoice 可重复同步系统音色且不产生重复记录', async () => {
+    await db.addCustomVoice('user-voice-001', userId, '用户自己的音色', '必须保留');
+    await db.upsertSystemVoice('system-voice-001', '本地系统音色', '初始描述');
+    await db.upsertSystemVoice('system-voice-001', '已更新名称', '更新描述');
+
+    const systemVoices = await db.getSystemVoices();
+    const userVoices = await db.getCustomVoicesByUserId(userId);
+    expect(systemVoices).toHaveLength(1);
+    expect(userVoices).toEqual([
+      expect.objectContaining({ id: 'user-voice-001', name: '用户自己的音色' }),
+    ]);
+    expect(systemVoices[0]).toMatchObject({
+      id: 'system-voice-001',
+      user_id: 'system',
+      name: '已更新名称',
+      desc: '更新描述',
+      is_system: 1,
+    });
+  });
 });
 
 describe('Database - 统计', () => {
