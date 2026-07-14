@@ -162,6 +162,20 @@ async function initTables() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS feedback (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id VARCHAR(64) NOT NULL,
+      content TEXT NOT NULL,
+      contact VARCHAR(100) DEFAULT '',
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_feedback_status (status),
+      INDEX idx_feedback_user (user_id),
+      CONSTRAINT fk_feedback_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   const defaults = [
     ['free', 'max_voice_clones', '1'],
     ['free', 'daily_tts_limit', '10'],
@@ -196,6 +210,7 @@ function makeMemoryStore() {
     userTiers: [],
     usageTracking: [],
     userFavorites: [],
+    feedback: [],
   };
 }
 
@@ -628,6 +643,64 @@ async function migrateFromJson(jsonPath) {
   }
 }
 
+// ===== 问题反馈 =====
+
+async function addFeedback(userId, content, contact) {
+  const id = crypto.randomInt(1, 2147483647);
+  if (memory) {
+    const fb = { id, user_id: userId, content, contact: contact || '', status: 'pending', created_at: new Date().toISOString() };
+    memory.feedback = memory.feedback || [];
+    memory.feedback.push(fb);
+    return fb;
+  }
+  await query(
+    'INSERT INTO feedback (user_id, content, contact, status) VALUES (?, ?, ?, ?)',
+    [userId, content, contact || '', 'pending']
+  );
+  const rows = await query('SELECT * FROM feedback WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [userId]);
+  return normalizeRow(rows[0]);
+}
+
+async function getAllFeedback(status) {
+  if (memory) {
+    let list = memory.feedback || [];
+    if (status) list = list.filter(f => f.status === status);
+    return list.map(normalizeRow).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  let sql = `
+    SELECT f.*, u.phone, u.nickname
+    FROM feedback f
+    LEFT JOIN users u ON f.user_id = u.id
+  `;
+  const params = [];
+  if (status) {
+    sql += ' WHERE f.status = ?';
+    params.push(status);
+  }
+  sql += ' ORDER BY f.created_at DESC';
+  const rows = await query(sql, params);
+  return rows.map(normalizeRow);
+}
+
+async function updateFeedbackStatus(id, status) {
+  const numId = Number(id);
+  if (memory) {
+    const fb = (memory.feedback || []).find(f => f.id === numId);
+    if (fb) fb.status = status;
+    return;
+  }
+  await query('UPDATE feedback SET status = ? WHERE id = ?', [status, numId]);
+}
+
+async function deleteFeedback(id) {
+  const numId = Number(id);
+  if (memory) {
+    memory.feedback = (memory.feedback || []).filter(f => f.id !== numId);
+    return;
+  }
+  await query('DELETE FROM feedback WHERE id = ?', [numId]);
+}
+
 module.exports = {
   getPool,
   resetDb,
@@ -662,4 +735,8 @@ module.exports = {
   incrementTtsUsage,
   getUsageByDate,
   getAllUsageByDate,
+  addFeedback,
+  getAllFeedback,
+  updateFeedbackStatus,
+  deleteFeedback,
 };

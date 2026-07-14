@@ -307,6 +307,130 @@
     }
     .logout-btn:hover { background: #f5f5f5; border-color: #ccc; color: #333; }
 
+    /* 反馈按钮 */
+    .feedback-btn {
+      padding: 6px 16px;
+      background: #fff;
+      border: 1px solid #667eea;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #667eea;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .feedback-btn:hover { background: #f0f2ff; }
+
+    /* 反馈弹窗 */
+    .feedback-modal {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .feedback-modal-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+    }
+    .feedback-modal-content {
+      position: relative;
+      background: #fff;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .feedback-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px;
+      border-bottom: 1px solid #eee;
+    }
+    .feedback-modal-header h3 { margin: 0; font-size: 18px; }
+    .feedback-modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #999;
+      padding: 0;
+      line-height: 1;
+    }
+    .feedback-modal-close:hover { color: #333; }
+    .feedback-modal-body { padding: 20px 24px; }
+
+    /* 反馈列表（管理员） */
+    .feedback-list { display: flex; flex-direction: column; gap: 12px; }
+    .feedback-card {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 16px;
+      border-left: 4px solid #667eea;
+    }
+    .feedback-card.status-processing { border-left-color: #fb8c00; }
+    .feedback-card.status-resolved { border-left-color: #43a047; }
+    .feedback-card.status-closed { border-left-color: #9e9e9e; opacity: 0.7; }
+    .feedback-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .feedback-card-user {
+      font-size: 13px;
+      color: #555;
+    }
+    .feedback-card-time {
+      font-size: 12px;
+      color: #999;
+    }
+    .feedback-card-content {
+      font-size: 14px;
+      color: #333;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .feedback-card-contact {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    .feedback-card-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .feedback-card-actions button {
+      padding: 4px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+      background: #fff;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .feedback-card-actions button:hover { background: #f0f0f0; }
+    .feedback-card-actions .delete-feedback-btn { color: #e53935; border-color: #ffcdd2; }
+    .feedback-card-actions .delete-feedback-btn:hover { background: #ffebee; }
+    .feedback-status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .feedback-status-badge.pending { background: #e3f2fd; color: #1565c0; }
+    .feedback-status-badge.processing { background: #fff3e0; color: #e65100; }
+    .feedback-status-badge.resolved { background: #e8f5e9; color: #2e7d32; }
+    .feedback-status-badge.closed { background: #f5f5f5; color: #757575; }
+
     /* ===== 内容区 ===== */
     .content-area {
       padding: 0 40px 40px;
@@ -643,6 +767,122 @@
       font-size: 12px;
       color: #888;
       margin-bottom: 20px;
+    }
+
+    /* 录音区域 */
+    .record-area {
+      background: #fff;
+      border: 2px solid #e8e8e8;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+    }
+
+    .record-area.recording { border-color: #e53935; background: #fff5f5; }
+    .record-area.has-recording { border-color: #2e7d32; background: #f1f8e9; }
+
+    .record-btn {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 3px solid #e53935;
+      background: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+      transition: all 0.2s;
+    }
+
+    .record-btn:hover { background: #ffebee; transform: scale(1.05); }
+
+    .record-btn .record-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #e53935;
+      transition: all 0.2s;
+    }
+
+    .record-btn.recording .record-dot {
+      border-radius: 4px;
+      width: 22px;
+      height: 22px;
+      background: #e53935;
+    }
+
+    .record-timer {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .record-timer.recording { color: #e53935; }
+
+    .record-hint {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .record-playback {
+      margin-top: 12px;
+    }
+
+    .record-playback audio {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .record-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .record-actions button {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .record-actions .re-record-btn {
+      background: #f0f0f0;
+      color: #555;
+    }
+
+    .record-actions .re-record-btn:hover { background: #e0e0e0; }
+
+    .record-actions .use-record-btn {
+      background: linear-gradient(135deg, #43a047, #2e7d32);
+      color: #fff;
+    }
+
+    .record-actions .use-record-btn:hover { opacity: 0.9; }
+
+    .input-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+      color: #aaa;
+      font-size: 13px;
+    }
+
+    .input-divider::before,
+    .input-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e8e8e8;
     }
 
     .upload-area {
@@ -1083,7 +1323,34 @@
         <span class="user-phone" id="userPhone"></span>
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
+        <button class="feedback-btn" onclick="openFeedbackModal()">💬 问题反馈</button>
         <button class="logout-btn" onclick="logout()">退出登录</button>
+      </div>
+    </div>
+
+    <!-- 问题反馈弹窗 -->
+    <div class="feedback-modal" id="feedbackModal" style="display:none">
+      <div class="feedback-modal-overlay" onclick="closeFeedbackModal()"></div>
+      <div class="feedback-modal-content">
+        <div class="feedback-modal-header">
+          <h3>💬 问题反馈</h3>
+          <button class="feedback-modal-close" onclick="closeFeedbackModal()">×</button>
+        </div>
+        <div class="feedback-modal-body">
+          <div class="form-group">
+            <label>反馈内容</label>
+            <textarea id="feedbackContent" placeholder="请描述您遇到的问题或建议..." style="min-height:120px;resize:vertical;"></textarea>
+            <div class="char-count"><span id="feedbackCharCount">0</span> / 2000</div>
+          </div>
+          <div class="form-group">
+            <label>联系方式（选填）</label>
+            <input type="text" id="feedbackContact" placeholder="手机号或微信，方便我们联系您">
+          </div>
+          <div id="feedbackMsg"></div>
+          <button class="clone-btn" style="margin-top:12px" onclick="submitFeedback()">
+            <span class="btn-text">提交反馈</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1181,7 +1448,25 @@
 
         <div class="clone-section">
           <h3>🎤 克隆你的声音</h3>
-          <p class="subtitle">上传一段 15~20 秒的语音，即可克隆出你的专属音色</p>
+          <p class="subtitle">录制或上传一段 15~20 秒的语音，即可克隆出你的专属音色</p>
+
+          <!-- 录音区域 -->
+          <div class="record-area" id="recordArea">
+            <button class="record-btn" id="recordBtn" onclick="toggleRecording()">
+              <div class="record-dot"></div>
+            </button>
+            <div class="record-timer" id="recordTimer">00:00</div>
+            <div class="record-hint" id="recordHint">点击按钮开始录音（最长 20 秒）</div>
+            <div class="record-playback" id="recordPlayback" style="display:none">
+              <audio id="recordedAudio" controls></audio>
+              <div class="record-actions">
+                <button class="re-record-btn" onclick="resetRecording()">🔄 重新录制</button>
+                <button class="use-record-btn" onclick="useRecording()">✅ 使用这段录音</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="input-divider">或上传音频文件</div>
 
           <div class="upload-area" id="uploadArea" onclick="document.getElementById('audioFile').click()">
             <div class="icon">📁</div>
@@ -1235,6 +1520,7 @@
           <div class="admin-sub-tab" onclick="switchAdminTab('quota-config')">⚙️ 配额设置</div>
           <div class="admin-sub-tab" onclick="switchAdminTab('user-manage')">👥 用户管理</div>
           <div class="admin-sub-tab" onclick="switchAdminTab('usage')">📈 用量记录</div>
+          <div class="admin-sub-tab" onclick="switchAdminTab('feedback')">💬 问题反馈</div>
         </div>
 
         <!-- 概览面板 -->
@@ -1305,6 +1591,24 @@
             </thead>
             <tbody id="usageBody"></tbody>
           </table>
+        </div>
+
+        <!-- 问题反馈面板 -->
+        <div id="admin-feedback" class="admin-sub-content" style="display:none">
+          <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <label style="font-size: 13px; color: #555;">状态筛选：</label>
+            <select id="feedbackStatusFilter" onchange="loadAdminFeedback()" style="padding:6px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px;">
+              <option value="">全部</option>
+              <option value="pending">待处理</option>
+              <option value="processing">处理中</option>
+              <option value="resolved">已解决</option>
+              <option value="closed">已关闭</option>
+            </select>
+            <button class="save-btn" onclick="loadAdminFeedback()" style="padding: 6px 16px;">刷新</button>
+          </div>
+          <div id="feedbackList" class="feedback-list">
+            <div class="empty-hint">暂无反馈</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1789,7 +2093,7 @@
     function switchAdminTab(subTab) {
       document.querySelectorAll('.admin-sub-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.admin-sub-content').forEach(c => c.style.display = 'none');
-      const tabs = { overview: 0, 'quota-config': 1, 'user-manage': 2, usage: 3 };
+      const tabs = { overview: 0, 'quota-config': 1, 'user-manage': 2, usage: 3, feedback: 4 };
       const allTabs = document.querySelectorAll('.admin-sub-tab');
       if (allTabs[tabs[subTab]]) allTabs[tabs[subTab]].classList.add('active');
       document.getElementById('admin-' + subTab).style.display = '';
@@ -1800,6 +2104,7 @@
         document.getElementById('usageDateInput').value = new Date().toISOString().slice(0, 10);
         loadUsageRecords();
       }
+      if (subTab === 'feedback') loadAdminFeedback();
     }
 
     // ===== 应用初始化 =====
@@ -1954,6 +2259,111 @@
       if (e.key === 'Enter') sendCode();
     });
 
+    // ===== 录音功能 =====
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordInterval = null;
+    let recordSeconds = 0;
+    let recordedBlob = null;
+    const MAX_RECORD_SECONDS = 20;
+
+    async function toggleRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    }
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        audioChunks = [];
+        recordSeconds = 0;
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const audioUrl = URL.createObjectURL(recordedBlob);
+          document.getElementById('recordedAudio').src = audioUrl;
+          document.getElementById('recordPlayback').style.display = '';
+          document.getElementById('recordArea').classList.add('has-recording');
+          document.getElementById('recordArea').classList.remove('recording');
+          stream.getTracks().forEach(t => t.stop());
+        };
+
+        mediaRecorder.start();
+        document.getElementById('recordArea').classList.add('recording');
+        document.getElementById('recordBtn').classList.add('recording');
+        document.getElementById('recordTimer').classList.add('recording');
+        document.getElementById('recordHint').textContent = '正在录音... 点击停止';
+        document.getElementById('recordPlayback').style.display = 'none';
+
+        recordInterval = setInterval(() => {
+          recordSeconds++;
+          const mins = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+          const secs = String(recordSeconds % 60).padStart(2, '0');
+          document.getElementById('recordTimer').textContent = `${mins}:${secs}`;
+          document.getElementById('recordHint').textContent = `正在录音... 剩余 ${MAX_RECORD_SECONDS - recordSeconds} 秒`;
+
+          if (recordSeconds >= MAX_RECORD_SECONDS) {
+            stopRecording();
+          }
+        }, 1000);
+      } catch (err) {
+        showCloneError('无法访问麦克风，请检查浏览器权限设置');
+        console.error('Microphone error:', err);
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+      clearInterval(recordInterval);
+      document.getElementById('recordBtn').classList.remove('recording');
+      document.getElementById('recordTimer').classList.remove('recording');
+      document.getElementById('recordHint').textContent = '录音完成，可试听后使用';
+    }
+
+    function resetRecording() {
+      recordedBlob = null;
+      audioChunks = [];
+      recordSeconds = 0;
+      document.getElementById('recordTimer').textContent = '00:00';
+      document.getElementById('recordPlayback').style.display = 'none';
+      document.getElementById('recordArea').classList.remove('has-recording', 'recording');
+      document.getElementById('recordHint').textContent = '点击按钮开始录音（最长 20 秒）';
+    }
+
+    async function useRecording() {
+      if (!recordedBlob) return;
+      // 读取为 base64
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        uploadedAudioBase64 = e.target.result;
+        // 检查时长
+        const audio = new Audio();
+        audio.src = URL.createObjectURL(recordedBlob);
+        audio.addEventListener('loadedmetadata', function() {
+          URL.revokeObjectURL(audio.src);
+          const duration = audio.duration;
+          if (duration < 15 || duration > 20) {
+            showCloneError(`录音时长需在 15~20 秒之间，当前 ${duration.toFixed(1)} 秒`);
+            uploadedAudioBase64 = null;
+            return;
+          }
+          hideCloneMessages();
+          document.getElementById('recordHint').textContent = `已选择录音（${duration.toFixed(1)} 秒）`;
+        });
+      };
+      reader.readAsDataURL(recordedBlob);
+    }
+
     // ===== 文件上传 =====
     function handleFileSelect(event) {
       const file = event.target.files[0];
@@ -2083,12 +2493,13 @@
         renderVoiceGrid();
         renderCustomVoicesList();
 
-        // 重置上传区域
+        // 重置上传区域和录音
         uploadedAudioBase64 = null;
         document.getElementById('uploadArea').classList.remove('has-file');
         document.getElementById('fileInfo').textContent = '';
         fileInput.value = '';
         document.getElementById('voiceName').value = '';
+        resetRecording();
       } catch (error) {
         showCloneError(error.message || '克隆失败，请稍后重试');
       } finally {
@@ -2262,6 +2673,125 @@
     function hideCloneMessages() {
       document.getElementById('cloneError').classList.remove('show');
       document.getElementById('cloneSuccess').classList.remove('show');
+    }
+
+    // ===== 问题反馈 =====
+    function openFeedbackModal() {
+      document.getElementById('feedbackModal').style.display = '';
+      document.getElementById('feedbackContent').value = '';
+      document.getElementById('feedbackContact').value = '';
+      document.getElementById('feedbackCharCount').textContent = '0';
+      document.getElementById('feedbackMsg').innerHTML = '';
+    }
+
+    function closeFeedbackModal() {
+      document.getElementById('feedbackModal').style.display = 'none';
+    }
+
+    document.getElementById('feedbackContent')?.addEventListener('input', function() {
+      document.getElementById('feedbackCharCount').textContent = this.value.length;
+    });
+
+    async function submitFeedback() {
+      const content = document.getElementById('feedbackContent').value.trim();
+      const contact = document.getElementById('feedbackContact').value.trim();
+      const msgEl = document.getElementById('feedbackMsg');
+
+      if (!content) {
+        msgEl.innerHTML = '<div class="error-msg show">请填写反馈内容</div>';
+        return;
+      }
+
+      try {
+        const response = await authFetch('api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, contact }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '提交失败');
+
+        msgEl.innerHTML = '<div class="success-msg show">反馈已提交，感谢您的反馈！</div>';
+        setTimeout(() => closeFeedbackModal(), 1500);
+      } catch (err) {
+        msgEl.innerHTML = `<div class="error-msg show">${err.message}</div>`;
+      }
+    }
+
+    // ===== 管理员：反馈管理 =====
+    async function loadAdminFeedback() {
+      const status = document.getElementById('feedbackStatusFilter').value;
+      const url = 'api/auth/admin/feedback' + (status ? `?status=${status}` : '');
+
+      try {
+        const response = await authFetch(url);
+        if (!response.ok) throw new Error('加载失败');
+        const list = await response.json();
+        renderFeedbackList(list);
+      } catch (err) {
+        document.getElementById('feedbackList').innerHTML = `<div class="error-msg show">${err.message}</div>`;
+      }
+    }
+
+    function renderFeedbackList(list) {
+      const container = document.getElementById('feedbackList');
+      if (!list || list.length === 0) {
+        container.innerHTML = '<div class="empty-hint">暂无反馈</div>';
+        return;
+      }
+
+      const statusLabels = { pending: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭' };
+
+      container.innerHTML = list.map(fb => `
+        <div class="feedback-card status-${fb.status}">
+          <div class="feedback-card-header">
+            <span class="feedback-card-user">${escapeHtml(fb.nickname || fb.phone || '用户')} <span style="color:#999">${escapeHtml(fb.phone || '')}</span></span>
+            <span class="feedback-card-time">${fb.created_at || ''}</span>
+          </div>
+          <div style="margin-bottom:8px">
+            <span class="feedback-status-badge ${fb.status}">${statusLabels[fb.status] || fb.status}</span>
+          </div>
+          <div class="feedback-card-content">${escapeHtml(fb.content)}</div>
+          ${fb.contact ? `<div class="feedback-card-contact">联系方式：${escapeHtml(fb.contact)}</div>` : ''}
+          <div class="feedback-card-actions">
+            ${fb.status !== 'processing' ? `<button onclick="updateFeedbackStatus(${fb.id}, 'processing')">标记处理中</button>` : ''}
+            ${fb.status !== 'resolved' ? `<button onclick="updateFeedbackStatus(${fb.id}, 'resolved')">标记已解决</button>` : ''}
+            ${fb.status !== 'closed' ? `<button onclick="updateFeedbackStatus(${fb.id}, 'closed')">关闭</button>` : ''}
+            <button class="delete-feedback-btn" onclick="deleteFeedback(${fb.id})">删除</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function updateFeedbackStatus(id, status) {
+      try {
+        const response = await authFetch(`api/auth/admin/feedback/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        });
+        if (!response.ok) throw new Error('更新失败');
+        loadAdminFeedback();
+      } catch (err) {
+        alert('更新失败: ' + err.message);
+      }
+    }
+
+    async function deleteFeedback(id) {
+      if (!confirm('确定要删除这条反馈吗？')) return;
+      try {
+        const response = await authFetch(`api/auth/admin/feedback/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('删除失败');
+        loadAdminFeedback();
+      } catch (err) {
+        alert('删除失败: ' + err.message);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // ===== 启动 =====

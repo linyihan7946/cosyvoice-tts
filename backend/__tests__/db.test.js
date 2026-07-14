@@ -245,3 +245,62 @@ describe('Database - 用量追踪', () => {
     expect(usageList[0].tts_count).toBe(2);
   });
 });
+
+describe('Database - 问题反馈', () => {
+  let userId;
+
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
+    const user = await db.createUser('13800138000', '测试用户');
+    userId = user.id;
+  });
+
+  test('addFeedback 创建反馈', async () => {
+    const fb = await db.addFeedback(userId, '测试反馈内容', '13800138000');
+    expect(fb).toHaveProperty('id');
+    expect(fb.user_id).toBe(userId);
+    expect(fb.content).toBe('测试反馈内容');
+    expect(fb.contact).toBe('13800138000');
+    expect(fb.status).toBe('pending');
+  });
+
+  test('addFeedback 不传 contact 默认为空', async () => {
+    const fb = await db.addFeedback(userId, '无联系方式');
+    expect(fb.contact).toBe('');
+  });
+
+  test('getAllFeedback 获取所有反馈', async () => {
+    await db.addFeedback(userId, '反馈1');
+    await db.addFeedback(userId, '反馈2');
+    const list = await db.getAllFeedback();
+    expect(list).toHaveLength(2);
+  });
+
+  test('getAllFeedback 按状态筛选', async () => {
+    const fb1 = await db.addFeedback(userId, '待处理');
+    const fb2 = await db.addFeedback(userId, '已解决');
+    await db.updateFeedbackStatus(fb2.id, 'resolved');
+
+    const pending = await db.getAllFeedback('pending');
+    expect(pending).toHaveLength(1);
+    expect(pending[0].content).toBe('待处理');
+
+    const resolved = await db.getAllFeedback('resolved');
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].content).toBe('已解决');
+  });
+
+  test('updateFeedbackStatus 更新状态', async () => {
+    const fb = await db.addFeedback(userId, '测试');
+    await db.updateFeedbackStatus(fb.id, 'processing');
+    const list = await db.getAllFeedback();
+    expect(list[0].status).toBe('processing');
+  });
+
+  test('deleteFeedback 删除反馈', async () => {
+    const fb = await db.addFeedback(userId, '要删除的反馈');
+    await db.deleteFeedback(fb.id);
+    const list = await db.getAllFeedback();
+    expect(list).toHaveLength(0);
+  });
+});

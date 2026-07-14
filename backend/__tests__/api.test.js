@@ -372,3 +372,140 @@ describe('API - 删除音色', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('API - 问题反馈', () => {
+  let userToken, adminToken, userId, adminId;
+
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
+    const user = await db.createUser('13800138000', '普通用户');
+    userId = user.id;
+    userToken = createToken(userId);
+
+    const admin = await db.createUser('13900139000', '管理员');
+    adminId = admin.id;
+    await db.setUserAdmin(adminId, true);
+    adminToken = createToken(adminId);
+  });
+
+  describe('POST /api/feedback', () => {
+    test('登录用户提交反馈成功', async () => {
+      const res = await request(app)
+        .post('/api/feedback')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ content: '这个功能很好用', contact: '13800138000' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.feedback.content).toBe('这个功能很好用');
+    });
+
+    test('未登录提交反馈返回 401', async () => {
+      const res = await request(app)
+        .post('/api/feedback')
+        .send({ content: '测试' });
+      expect(res.status).toBe(401);
+    });
+
+    test('内容为空返回 400', async () => {
+      const res = await request(app)
+        .post('/api/feedback')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ content: '' });
+      expect(res.status).toBe(400);
+    });
+
+    test('内容超过 2000 字返回 400', async () => {
+      const res = await request(app)
+        .post('/api/feedback')
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ content: 'a'.repeat(2001) });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/auth/admin/feedback', () => {
+    test('管理员获取反馈列表', async () => {
+      await db.addFeedback(userId, '用户反馈1');
+      await db.addFeedback(userId, '用户反馈2');
+
+      const res = await request(app)
+        .get('/api/auth/admin/feedback')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(2);
+    });
+
+    test('管理员按状态筛选反馈', async () => {
+      const fb1 = await db.addFeedback(userId, '待处理');
+      const fb2 = await db.addFeedback(userId, '已解决');
+      await db.updateFeedbackStatus(fb2.id, 'resolved');
+
+      const res = await request(app)
+        .get('/api/auth/admin/feedback?status=pending')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].content).toBe('待处理');
+    });
+
+    test('普通用户无法查看反馈返回 403', async () => {
+      const res = await request(app)
+        .get('/api/auth/admin/feedback')
+        .set('Authorization', `Bearer ${userToken}`);
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('PUT /api/auth/admin/feedback/:id', () => {
+    test('管理员更新反馈状态', async () => {
+      const fb = await db.addFeedback(userId, '测试');
+
+      const res = await request(app)
+        .put(`/api/auth/admin/feedback/${fb.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'resolved' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    test('无效状态返回 400', async () => {
+      const fb = await db.addFeedback(userId, '测试');
+
+      const res = await request(app)
+        .put(`/api/auth/admin/feedback/${fb.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'invalid' });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('DELETE /api/auth/admin/feedback/:id', () => {
+    test('管理员删除反馈', async () => {
+      const fb = await db.addFeedback(userId, '要删除');
+
+      const res = await request(app)
+        .delete(`/api/auth/admin/feedback/${fb.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+
+      const list = await db.getAllFeedback();
+      expect(list).toHaveLength(0);
+    });
+
+    test('普通用户无法删除反馈返回 403', async () => {
+      const fb = await db.addFeedback(userId, '测试');
+
+      const res = await request(app)
+        .delete(`/api/auth/admin/feedback/${fb.id}`)
+        .set('Authorization', `Bearer ${userToken}`);
+
+      expect(res.status).toBe(403);
+    });
+  });
+});

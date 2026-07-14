@@ -252,6 +252,27 @@ cosyvoice-tts/
 
 管理员：查询用量记录。Query: `?date=2026-07-08&userId=xxx`（均可选）
 
+### POST /api/feedback
+
+用户提交问题反馈。需要登录。
+
+请求体：
+```json
+{ "content": "反馈内容（最长 2000 字）", "contact": "联系方式（选填）" }
+```
+
+### GET /api/auth/admin/feedback
+
+管理员：获取反馈列表。Query: `?status=pending`（可选，筛选状态）
+
+### PUT /api/auth/admin/feedback/:id
+
+管理员：更新反馈状态。Body: `{ "status": "resolved" }`。可选值：`pending`/`processing`/`resolved`/`closed`
+
+### DELETE /api/auth/admin/feedback/:id
+
+管理员：删除反馈记录
+
 ---
 
 ## 配额系统
@@ -277,6 +298,7 @@ cosyvoice-tts/
 | `quota_config` | 各层级配额参数（key-value），运行时可改 |
 | `user_tiers` | 用户层级 + 会员到期时间 |
 | `usage_tracking` | 每日 TTS 用量（user_id + date 联合主键） |
+| `feedback` | 用户问题反馈（user_id, content, contact, status, created_at） |
 
 ---
 
@@ -342,9 +364,9 @@ npm run test:coverage # 查看覆盖率
 
 | 文件 | 测试类型 | 测试数量 |
 |---|---|---|
-| `__tests__/db.test.js` | 数据库层单元测试 | 30+ |
+| `__tests__/db.test.js` | 数据库层单元测试 | 37+ |
 | `__tests__/auth.test.js` | 认证模块单元测试 | 15+ |
-| `__tests__/api.test.js` | API 接口集成测试 | 20+ |
+| `__tests__/api.test.js` | API 接口集成测试 | 32+ |
 
 ### 测试策略
 
@@ -382,6 +404,9 @@ npm run test:coverage # 查看覆盖率
 | 2026-07-09 | **新增本地内存库兜底**：开发环境可设置 `USE_MEMORY_DB=true` 临时使用内存数据库启动页面；该开关在 `NODE_ENV=production` 下无效，线上仍强制使用 MySQL，避免部署数据丢失 |
 | 2026-07-09 | **修复 Windows .env 解析**：后端读取 `.env` 时先 `trim()` 再匹配，并支持数字/下划线变量名，避免 CRLF 行尾导致 `MYSQL_*`、短信和 API Key 等配置无法加载 |
 | 2026-07-13 | **优化微信浏览器音频下载**：`POST /api/tts` 支持 `returnUrl: true` 返回临时真实音频链接；新增 `/api/tts-audio/:id` inline 播放和 `/download` 附件下载；前端在微信内置浏览器中改为打开音频页面，避免 `Blob URL + download` 被微信拦截 |
+| 2026-07-14 | **新增问题反馈模块**：新增 `feedback` 表（id, user_id, content, contact, status, created_at）；新增 `POST /api/feedback` 用户提交反馈接口、`GET /api/auth/admin/feedback` 管理员查看反馈列表、`PUT /api/auth/admin/feedback/:id` 更新状态、`DELETE /api/auth/admin/feedback/:id` 删除反馈；反馈状态支持 pending/processing/resolved/closed；前端用户栏新增「问题反馈」按钮和弹窗；管理员面板新增「问题反馈」子标签，支持按状态筛选、标记处理、删除 |
+| 2026-07-14 | **音色克隆新增录音功能**：克隆页面顶部新增录音区域（放在文件上传前面），使用 MediaRecorder API 录制麦克风音频，最长 20 秒，带倒计时显示；录音完成后可试听、重新录制或使用；15~20 秒时长校验与文件上传一致 |
+| 2026-07-14 | **管理员删除音色免冷却**：管理员删除克隆音色后不再受 24 小时冷却期限制，可立即重新克隆 |
 
 ---
 

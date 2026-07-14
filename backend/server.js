@@ -54,6 +54,11 @@ const {
   incrementTtsUsage,
   getUsageByDate,
   getAllUsageByDate,
+  // 问题反馈
+  addFeedback,
+  getAllFeedback,
+  updateFeedbackStatus,
+  deleteFeedback,
 } = require('./db');
 
 const app = express();
@@ -746,6 +751,66 @@ app.get(routePath('/api/auth/admin/usage'), authMiddleware, async (req, res) => 
     nickname: u.nickname,
     ttsCount: u.tts_count,
   })));
+});
+
+// ============================================================
+//  问题反馈接口
+// ============================================================
+
+// 用户提交反馈
+app.post(routePath('/api/feedback'), authMiddleware, async (req, res) => {
+  const { content, contact } = req.body;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: '请填写反馈内容' });
+  }
+
+  if (content.trim().length > 2000) {
+    return res.status(400).json({ error: '反馈内容不能超过 2000 字' });
+  }
+
+  try {
+    const feedback = await addFeedback(req.userId, content.trim(), (contact || '').trim());
+    console.log(`[Feedback] 用户 ${req.userId} 提交了反馈`);
+    res.json({ success: true, feedback });
+  } catch (error) {
+    console.error('[Feedback] 提交失败:', error);
+    res.status(500).json({ error: '提交失败，请稍后重试' });
+  }
+});
+
+// 管理员：获取所有反馈
+app.get(routePath('/api/auth/admin/feedback'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
+  if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
+
+  const { status } = req.query;
+  const feedbackList = await getAllFeedback(status || undefined);
+  res.json(feedbackList);
+});
+
+// 管理员：更新反馈状态
+app.put(routePath('/api/auth/admin/feedback/:id'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
+  if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
+
+  const { status } = req.body;
+  const validStatuses = ['pending', 'processing', 'resolved', 'closed'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: `无效状态，可选: ${validStatuses.join(', ')}` });
+  }
+
+  await updateFeedbackStatus(req.params.id, status);
+  res.json({ success: true });
+});
+
+// 管理员：删除反馈
+app.delete(routePath('/api/auth/admin/feedback/:id'), authMiddleware, async (req, res) => {
+  const user = await getUserById(req.userId);
+  if (!user || !user.is_admin) return res.status(403).json({ error: '无权访问' });
+
+  await deleteFeedback(req.params.id);
+  res.json({ success: true });
 });
 
 // ============================================================
