@@ -1053,7 +1053,10 @@ app.post(routePath('/api/voice-clone'), authMiddleware, checkQuota('voice_clone'
 
     if (!response.ok) {
       console.error('Voice Clone API Error:', response.status, JSON.stringify(data));
-      const errorMsg = data.message || data.error?.message || `克隆失败 (${response.status})`;
+      const upstreamError = data.message || data.error?.message || `克隆失败 (${response.status})`;
+      const errorMsg = /file format unsupported/i.test(upstreamError)
+        ? '音频格式不受支持，请重新录制或上传 WAV、MP3、M4A 音频'
+        : upstreamError;
       return res.status(response.status).json({ error: errorMsg, detail: data });
     }
 
@@ -1210,7 +1213,7 @@ app.post(routePath('/api/auth/admin/clone-system-voice'), authMiddleware, async 
       return res.status(500).json({ error: '克隆成功但未返回音色 ID', detail: data });
     }
 
-    // 保存为系统音色（user_id = 'system', is_system = 1）
+    // 保存为系统音色（无用户归属，is_system = 1）
     const newVoice = await addSystemVoice(clonedVoiceId, voiceName, '');
 
     try {

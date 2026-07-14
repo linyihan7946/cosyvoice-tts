@@ -1497,7 +1497,7 @@
                   <audio id="recordedAudio" controls></audio>
                   <div class="record-actions">
                     <button class="re-record-btn" onclick="resetRecording()">🔄 重新录制</button>
-                    <button class="use-record-btn" onclick="useRecording()">✅ 使用这段录音</button>
+                    <button class="use-record-btn" id="useRecordingBtn" onclick="useRecording()">✅ 使用这段录音</button>
                   </div>
                 </div>
               </div>
@@ -1655,6 +1655,7 @@
     </div>
   </div>
 
+  <script src="audio-utils.js"></script>
   <script>
     // ===== 全局状态 =====
     let currentUser = null;
@@ -2306,7 +2307,20 @@
     let recordInterval = null;
     let recordSeconds = 0;
     let recordedBlob = null;
+    let convertedRecordingBlob = null;
+    let convertedRecordingDuration = null;
     const MAX_RECORD_SECONDS = 20;
+
+    function getSupportedRecordingMimeType() {
+      const candidates = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/ogg;codecs=opus',
+      ];
+      if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
+      return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+    }
 
     async function toggleRecording() {
       if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -2319,16 +2333,23 @@
     async function startRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+        const recordingMimeType = getSupportedRecordingMimeType();
+        mediaRecorder = recordingMimeType
+          ? new MediaRecorder(stream, { mimeType: recordingMimeType })
+          : new MediaRecorder(stream);
         audioChunks = [];
         recordSeconds = 0;
+        recordedBlob = null;
+        convertedRecordingBlob = null;
+        convertedRecordingDuration = null;
 
         mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) audioChunks.push(e.data);
         };
 
         mediaRecorder.onstop = () => {
-          recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const actualMimeType = mediaRecorder.mimeType || audioChunks[0]?.type || 'audio/webm';
+          recordedBlob = new Blob(audioChunks, { type: actualMimeType });
           const audioUrl = URL.createObjectURL(recordedBlob);
           document.getElementById('recordedAudio').src = audioUrl;
           document.getElementById('recordPlayback').style.display = '';
@@ -2373,36 +2394,85 @@
 
     function resetRecording() {
       recordedBlob = null;
+      convertedRecordingBlob = null;
+      convertedRecordingDuration = null;
       audioChunks = [];
       recordSeconds = 0;
+      uploadedAudioBase64 = null;
       document.getElementById('recordTimer').textContent = '00:00';
       document.getElementById('recordPlayback').style.display = 'none';
       document.getElementById('recordArea').classList.remove('has-recording', 'recording');
       document.getElementById('recordHint').textContent = '点击按钮开始录音（最长 20 秒）';
     }
 
+    function readBlobAsDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('读取录音失败'));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    function readBlobAsArrayBuffer(blob) {
+      if (typeof blob.arrayBuffer === 'function') return blob.arrayBuffer();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error('读取录音失败'));
+        reader.readAsArrayBuffer(blob);
+      });
+    }
+
+    async function convertRecordingToWav(blob) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error('当前浏览器不支持录音格式转换');
+
+      const audioContext = new AudioContextClass();
+      try {
+        const audioBuffer = await audioContext.decodeAudioData(await readBlobAsArrayBuffer(blob));
+        return {
+          blob: new Blob([encodeAudioBufferToWav(audioBuffer)], { type: 'audio/wav' }),
+          duration: audioBuffer.duration,
+        };
+      } finally {
+        try {
+          await audioContext.close();
+        } catch (_) {}
+      }
+    }
+
     async function useRecording() {
       if (!recordedBlob) return;
-      // 读取为 base64
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        uploadedAudioBase64 = e.target.result;
-        // 检查时长
-        const audio = new Audio();
-        audio.src = URL.createObjectURL(recordedBlob);
-        audio.addEventListener('loadedmetadata', function() {
-          URL.revokeObjectURL(audio.src);
-          const duration = audio.duration;
-          if (duration < 15 || duration > 20) {
-            showCloneError(`录音时长需在 15~20 秒之间，当前 ${duration.toFixed(1)} 秒`);
-            uploadedAudioBase64 = null;
-            return;
-          }
-          hideCloneMessages();
-          document.getElementById('recordHint').textContent = `已选择录音（${duration.toFixed(1)} 秒）`;
-        });
-      };
-      reader.readAsDataURL(recordedBlob);
+
+      const useButton = document.getElementById('useRecordingBtn');
+      useButton.disabled = true;
+      uploadedAudioBase64 = null;
+      document.getElementById('recordHint').textContent = '正在转换为 WAV，请稍候...';
+
+      try {
+        const converted = convertedRecordingBlob
+          ? { blob: convertedRecordingBlob, duration: convertedRecordingDuration }
+          : await convertRecordingToWav(recordedBlob);
+        const duration = converted.duration;
+        if (!Number.isFinite(duration) || duration < 15 || duration > 20) {
+          showCloneError(`录音时长需在 15~20 秒之间，当前 ${Number.isFinite(duration) ? duration.toFixed(1) : '未知'} 秒`);
+          document.getElementById('recordHint').textContent = '录音时长不符合要求，请重新录制';
+          return;
+        }
+
+        convertedRecordingBlob = converted.blob;
+        convertedRecordingDuration = duration;
+        uploadedAudioBase64 = await readBlobAsDataUrl(converted.blob);
+        hideCloneMessages();
+        document.getElementById('recordHint').textContent = `已选择录音（${duration.toFixed(1)} 秒，WAV）`;
+      } catch (error) {
+        uploadedAudioBase64 = null;
+        document.getElementById('recordHint').textContent = '录音转换失败，请重新录制';
+        showCloneError(`录音格式转换失败：${error.message || '请重新录制或改用音频文件上传'}`);
+      } finally {
+        useButton.disabled = false;
+      }
     }
 
     // ===== 文件上传 =====

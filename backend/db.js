@@ -368,49 +368,35 @@ async function getSystemVoices() {
 
 async function addSystemVoice(voiceId, name, desc) {
   if (memory) {
-    if (!memory.users.find(u => u.id === 'system')) {
-      memory.users.push({ id: 'system', phone: '00000000000', nickname: '系统', is_admin: 0, created_at: new Date().toISOString() });
-    }
-    memory.customVoices.push({ id: voiceId, user_id: 'system', name, desc: desc || '', is_system: 1, created_at: new Date().toISOString() });
+    memory.customVoices.push({ id: voiceId, user_id: null, name, desc: desc || '', is_system: 1, created_at: new Date().toISOString() });
     return getCustomVoiceById(voiceId);
   }
   await query(
-    'INSERT IGNORE INTO users (id, phone, nickname, is_admin) VALUES (?, ?, ?, 0)',
-    ['system', '00000000000', '系统']
-  );
-  await query(
-    'INSERT INTO custom_voices (id, user_id, name, `desc`, is_system) VALUES (?, ?, ?, ?, 1)',
-    [voiceId, 'system', name, desc || '']
+    'INSERT INTO custom_voices (id, user_id, name, `desc`, is_system) VALUES (?, NULL, ?, ?, 1)',
+    [voiceId, name, desc || '']
   );
   return getCustomVoiceById(voiceId);
 }
 
 async function upsertSystemVoice(voiceId, name, desc) {
   if (memory) {
-    if (!memory.users.find(u => u.id === 'system')) {
-      memory.users.push({ id: 'system', phone: '00000000000', nickname: '系统', is_admin: 0, created_at: new Date().toISOString() });
-    }
     const existing = memory.customVoices.find(v => v.id === voiceId);
     if (existing) {
-      Object.assign(existing, { user_id: 'system', name, desc: desc || '', is_system: 1 });
+      Object.assign(existing, { user_id: null, name, desc: desc || '', is_system: 1 });
     } else {
-      memory.customVoices.push({ id: voiceId, user_id: 'system', name, desc: desc || '', is_system: 1, created_at: new Date().toISOString() });
+      memory.customVoices.push({ id: voiceId, user_id: null, name, desc: desc || '', is_system: 1, created_at: new Date().toISOString() });
     }
     return getCustomVoiceById(voiceId);
   }
   await query(
-    'INSERT IGNORE INTO users (id, phone, nickname, is_admin) VALUES (?, ?, ?, 0)',
-    ['system', '00000000000', '系统']
-  );
-  await query(
     `INSERT INTO custom_voices (id, user_id, name, \`desc\`, is_system)
-     VALUES (?, ?, ?, ?, 1)
+     VALUES (?, NULL, ?, ?, 1)
      ON DUPLICATE KEY UPDATE
-       user_id = VALUES(user_id),
+       user_id = NULL,
        name = VALUES(name),
        \`desc\` = VALUES(\`desc\`),
        is_system = 1`,
-    [voiceId, 'system', name, desc || '']
+    [voiceId, name, desc || '']
   );
   return getCustomVoiceById(voiceId);
 }

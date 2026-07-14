@@ -24,6 +24,7 @@ jest.mock('node-fetch', () => {
 });
 
 const app = require('../server');
+const fetch = require('node-fetch');
 
 describe('API - 认证接口', () => {
   beforeEach(async () => {
@@ -350,6 +351,34 @@ describe('API - 音色克隆配额检查', () => {
 
     expect(res.status).toBe(429);
     expect(res.body.error).toContain('克隆上限');
+  });
+});
+
+describe('API - 音色克隆格式提示', () => {
+  beforeEach(async () => {
+    await db.resetDb(':memory:');
+  });
+
+  test('上游格式错误转换为中文提示', async () => {
+    const user = await db.createUser('13800138000', '测试');
+    const token = createToken(user.id);
+    fetch.mockImplementationOnce(() => Promise.resolve({
+      ok: false,
+      status: 400,
+      json: () => Promise.resolve({ message: 'File format unsupported.' }),
+    }));
+
+    const res = await request(app)
+      .post('/api/voice-clone')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        audioBase64: 'data:audio/webm;base64,fake',
+        voiceName: 'newvoice',
+        language: 'zh',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('音频格式不受支持');
   });
 });
 

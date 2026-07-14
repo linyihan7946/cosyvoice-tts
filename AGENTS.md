@@ -54,7 +54,8 @@ cosyvoice-tts/
 │       ├── auth.test.js   # 认证模块测试
 │       └── api.test.js    # API 接口测试
 ├── frontend/              # 前端
-│   └── index.html         # 前端单页应用
+│   ├── index.html         # 前端单页应用
+│   └── audio-utils.js     # 浏览器录音转单声道 PCM WAV
 ├── Dockerfile             # 生产镜像构建，安装 Node + UniSMS Python SDK
 ├── docker-compose.yml     # 生产部署配置，MySQL 使用 Docker 命名卷持久化
 ├── .dockerignore          # Docker 构建排除规则（禁止打包本地数据库）
@@ -413,6 +414,8 @@ npm run test:coverage # 查看覆盖率
 | 2026-07-14 | **管理员删除音色免冷却**：管理员删除克隆音色后不再受 24 小时冷却期限制，可立即重新克隆 |
 | 2026-07-14 | **克隆音频入口改为左右布局**：录音和上传音频改为等高双列展示，窄屏仍保持并排并压缩内部控件 |
 | 2026-07-14 | **系统音色随一键部署同步**：新增 `backend/system_voices.json` 部署清单；服务启动时以合并方式写入 MySQL；管理员新增/删除系统音色后自动更新清单；清单作为普通项目文件沿用一键部署的通用目录同步，无需定制部署工具，也不覆盖线上用户数据 |
+| 2026-07-14 | **修复线上系统音色导入外键冲突**：系统音色改为 `user_id = NULL, is_system = 1`，不再创建占位 `system` 用户，兼容旧迁移用户已占用 `00000000000` 手机号的线上数据库 |
+| 2026-07-14 | **修复浏览器录音克隆格式错误**：录音完成后使用 Web Audio API 解码，并在前端转为单声道 16-bit PCM WAV 后提交，兼容浏览器产生的 WebM/Opus、MP4 等录音容器；后端将上游格式错误转换为中文提示 |
 
 ---
 
@@ -438,3 +441,5 @@ npm run test:coverage # 查看覆盖率
 18. **环境变量解析**：`.env` 支持 Windows CRLF 行尾；新增配置项时保持 `KEY=value` 格式即可，后端会先去除行首尾空白再解析
 19. **微信下载兼容**：微信内置浏览器会拦截 `Blob URL` 或 `a.download` 文件下载；语音生成前端应使用 `returnUrl: true` 获取真实音频链接，微信中打开 `/api/tts-audio/:id` 播放/保存，普通浏览器使用 `/download` 下载
 20. **系统音色部署同步**：`backend/system_voices.json` 是系统音色的可部署清单；管理员新增/删除系统音色后要保持清单同步；该文件由通用目录同步自然上传，不要在 `one-click-deployment` 中增加业务定制；服务启动只按 ID 合并系统音色，禁止为了同步清单而清空 `custom_voices` 表或覆盖线上 MySQL 数据目录
+21. **系统音色归属**：系统音色使用 `custom_voices.user_id = NULL` 和 `is_system = 1` 标识，不创建占位系统用户；旧 JSON 迁移用户可能已经占用 `00000000000`，系统音色同步不得依赖该手机号或固定用户 ID
+22. **浏览器录音格式**：`MediaRecorder` 输出通常是 WebM/Opus 或 MP4，不能直接提交百炼音色克隆；点击“使用这段录音”时必须通过 `frontend/audio-utils.js` 转为单声道 16-bit PCM WAV，并以 `data:audio/wav;base64,...` 提交

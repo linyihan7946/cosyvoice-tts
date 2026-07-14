@@ -108,21 +108,35 @@ describe('Database - 音色操作', () => {
   });
 
   test('upsertSystemVoice 可重复同步系统音色且不产生重复记录', async () => {
+    const legacyUser = await db.createUser('00000000000', 'Legacy用户');
     await db.addCustomVoice('user-voice-001', userId, '用户自己的音色', '必须保留');
     await db.upsertSystemVoice('system-voice-001', '本地系统音色', '初始描述');
     await db.upsertSystemVoice('system-voice-001', '已更新名称', '更新描述');
 
     const systemVoices = await db.getSystemVoices();
     const userVoices = await db.getCustomVoicesByUserId(userId);
+    const unchangedLegacyUser = await db.getUserByPhone('00000000000');
     expect(systemVoices).toHaveLength(1);
     expect(userVoices).toEqual([
       expect.objectContaining({ id: 'user-voice-001', name: '用户自己的音色' }),
     ]);
+    expect(unchangedLegacyUser.id).toBe(legacyUser.id);
     expect(systemVoices[0]).toMatchObject({
       id: 'system-voice-001',
-      user_id: 'system',
+      user_id: null,
       name: '已更新名称',
       desc: '更新描述',
+      is_system: 1,
+    });
+  });
+
+  test('addSystemVoice 不依赖占位用户', async () => {
+    await db.createUser('00000000000', '已存在的迁移用户');
+    const voice = await db.addSystemVoice('system-voice-002', '新增系统音色', '');
+
+    expect(voice).toMatchObject({
+      id: 'system-voice-002',
+      user_id: null,
       is_system: 1,
     });
   });
