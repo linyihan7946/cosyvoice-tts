@@ -63,7 +63,8 @@ const {
 } = require('./db');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number.parseInt(process.env.PORT || '3000', 10);
+app.locals.port = PORT;
 const PUBLIC_BASE_PATH = normalizeBasePath(process.env.PUBLIC_BASE_PATH);
 
 function normalizeBasePath(value) {
