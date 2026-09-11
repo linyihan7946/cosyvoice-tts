@@ -31,45 +31,63 @@ describe('API - 认证接口', () => {
     await db.resetDb(':memory:');
   });
 
-  describe('POST /api/auth/send-code', () => {
-    test('有效手机号返回验证码', async () => {
+  describe('POST /api/auth/login', () => {
+    test('新用户首次登录自动注册', async () => {
       const res = await request(app)
-        .post('/api/auth/send-code')
-        .send({ phone: '13800138000' });
+        .post('/api/auth/login')
+        .send({ phone: '13800138000', password: '123456' });
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('debug_code');
-      expect(res.body.debug_code).toMatch(/^\d{6}$/);
+      expect(res.body).toHaveProperty('token');
+      expect(res.body.user.phone).toBe('13800138000');
+    });
+
+    test('已有用户密码正确登录成功', async () => {
+      // 先注册
+      await request(app)
+        .post('/api/auth/login')
+        .send({ phone: '13800138000', password: '123456' });
+
+      // 再登录
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ phone: '13800138000', password: '123456' });
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('token');
+    });
+
+    test('密码错误返回 400', async () => {
+      // 先注册
+      await request(app)
+        .post('/api/auth/login')
+        .send({ phone: '13800138000', password: '123456' });
+
+      // 错误密码
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ phone: '13800138000', password: 'wrongpassword' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('密码');
+    });
+
+    test('缺少密码返回 400', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ phone: '13800138000' });
+      expect(res.status).toBe(400);
     });
 
     test('无效手机号返回 400', async () => {
       const res = await request(app)
-        .post('/api/auth/send-code')
-        .send({ phone: '123' });
+        .post('/api/auth/login')
+        .send({ phone: '123', password: '123456' });
       expect(res.status).toBe(400);
     });
 
-    test('空手机号返回 400', async () => {
-      const res = await request(app)
-        .post('/api/auth/send-code')
-        .send({});
-      expect(res.status).toBe(400);
-    });
-  });
-
-  describe('POST /api/auth/login', () => {
-    test('缺少参数返回 400', async () => {
+    test('密码太短返回 400', async () => {
       const res = await request(app)
         .post('/api/auth/login')
-        .send({ phone: '13800138000' });
+        .send({ phone: '13800138000', password: '123' });
       expect(res.status).toBe(400);
-    });
-
-    test('错误验证码返回 400', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ phone: '13800138000', code: '000000' });
-      expect(res.status).toBe(400);
-      expect(res.body.error).toContain('验证码');
     });
   });
 

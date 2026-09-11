@@ -3,10 +3,6 @@ const fetch = require('node-fetch');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-
-const execFileAsync = promisify(execFile);
 
 // 读取 .env 文件（简单的实现，不需要额外依赖）
 const envPath = path.join(__dirname, '.env');
@@ -27,6 +23,7 @@ const {
   getUserById,
   createUser,
   setUserAdmin,
+  updateUserPassword,
   deleteUser,
   getCustomVoicesByUserId,
   getTodayCloneCount,
@@ -103,16 +100,6 @@ const ADMIN_PHONES = new Set(
     .map(s => s.trim())
     .filter(Boolean)
 );
-
-// 短信配置
-const SMS_CONFIG = {
-  accessKeyId: process.env.SMS_ACCESS_KEY_ID || '',
-  accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || '',
-  signature: process.env.SMS_SIGNATURE || '',
-  templateId: process.env.SMS_TEMPLATE_ID || '',
-};
-const SHOULD_RETURN_DEBUG_CODE = process.env.SHOW_DEBUG_CODE === 'true' || process.env.NODE_ENV !== 'production';
-const SMS_SDK_SCRIPT = path.join(__dirname, 'send_sms_unisdk.py');
 
 // ============================================================
 //  配额检查中间件
@@ -235,45 +222,34 @@ const BUILTIN_VOICES = [
 ];
 
 // ============================================================
-//  验证码存储（内存）
+//  密码哈希工具（使用 Node.js 内置 crypto.scrypt）
 // ============================================================
-const codeStore = new Map(); // phone -> { code, expiresAt }
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_COST = 16384; // 2^14
 
-const CODE_EXPIRE_MS = 5 * 60 * 1000; // 5 分钟过期
-const GENERATED_AUDIO_TTL_MS = 30 * 60 * 1000; // 临时音频链接 30 分钟有效
-const generatedAudioStore = new Map(); // id -> { buffer, contentType, filename, expiresAt }
-
-function generateCode() {
-  // 6 位数字验证码，首位非零
-  const first = crypto.randomInt(1, 10).toString();
-  const rest = Array.from({ length: 5 }, () => crypto.randomInt(0, 10).toString()).join('');
-  return first + rest;
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, { N: SCRYPT_COST }).toString('hex');
+  return `${salt}:${hash}`;
 }
 
-function storeCode(phone, code) {
-  codeStore.set(phone, { code, expiresAt: Date.now() + CODE_EXPIRE_MS });
-}
-
-function verifyAndConsumeCode(phone, code) {
-  const entry = codeStore.get(phone);
-  if (!entry) return false;
-  if (Date.now() > entry.expiresAt) {
-    codeStore.delete(phone);
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  try {
+    const derived = crypto.scryptSync(password, salt, SCRYPT_KEYLEN, { N: SCRYPT_COST }).toString('hex');
+    return derived === hash;
+  } catch {
     return false;
   }
-  if (entry.code !== code) return false;
-  codeStore.delete(phone);
-  return true;
 }
 
-// 定期清理过期验证码
-const codeCleanupTimer = setInterval(() => {
-  const now = Date.now();
-  for (const [phone, entry] of codeStore) {
-    if (now > entry.expiresAt) codeStore.delete(phone);
-  }
-}, 60 * 1000);
-if (typeof codeCleanupTimer.unref === 'function') codeCleanupTimer.unref();
+// ============================================================
+//  临时音频存储
+// ============================================================
+const GENERATED_AUDIO_TTL_MS = 30 * 60 * 1000; // 临时音频链接 30 分钟有效
+const generatedAudioStore = new Map(); // id -> { buffer, contentType, filename, expiresAt }
 
 const audioCleanupTimer = setInterval(() => {
   const now = Date.now();
@@ -311,149 +287,6 @@ function sendGeneratedAudio(req, res, asAttachment = false) {
     'Accept-Ranges': 'bytes',
   });
   return res.send(entry.buffer);
-}
-
-// ============================================================
-//  短信发送（UniSMS）
-//  REST API: https://uni.apistd.com
-//  文档: https://unisms.apistd.com/docs
-// ============================================================
-async function sendSmsWithPythonSdk(phone, code) {
-  try {
-    const { stdout } = await execFileAsync(
-      process.env.PYTHON_BIN || 'python',
-      [SMS_SDK_SCRIPT, phone, code],
-      {
-        env: process.env,
-        timeout: 20000,
-        windowsHide: true,
-        maxBuffer: 1024 * 1024,
-      }
-    );
-    const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
-    const payload = JSON.parse(lines[lines.length - 1] || '{}');
-
-    if (payload.sent) {
-      console.log('[SMS] Python SDK 响应:', JSON.stringify(payload));
-      return { sent: true, sdkAvailable: true };
-    }
-
-    if (payload.sdk_available === false) {
-      console.warn('[SMS] Python SDK 不可用，回退 REST:', payload.error);
-      return { sent: false, sdkAvailable: false, error: payload.error };
-    }
-
-    console.warn('[SMS] Python SDK 发送失败:', JSON.stringify(payload));
-    return {
-      sent: false,
-      sdkAvailable: true,
-      error: payload.error || payload.message || payload.code || 'Python SDK 发送失败',
-    };
-  } catch (e) {
-    console.warn('[SMS] Python SDK 调用异常，回退 REST:', e.message);
-    return { sent: false, sdkAvailable: false, error: e.message };
-  }
-}
-
-async function sendSms(phone, code) {
-  if (process.env.NODE_ENV === 'test') {
-    return { sent: false, error: '测试环境跳过短信发送' };
-  }
-
-  if (!SMS_CONFIG.accessKeyId) {
-    console.log('[SMS] 未配置 SMS_ACCESS_KEY_ID，跳过短信发送');
-    return { sent: false, error: '未配置短信 AccessKey' };
-  }
-
-  if (!SMS_CONFIG.signature || !SMS_CONFIG.templateId) {
-    console.log('[SMS] 未配置短信签名或模板 ID，跳过短信发送');
-    return { sent: false, error: '未配置短信签名或模板 ID' };
-  }
-
-  const sdkResult = await sendSmsWithPythonSdk(phone, code);
-  if (sdkResult.sent) return sdkResult;
-  if (sdkResult.sdkAvailable) return sdkResult;
-
-  try {
-    // 与 ai-personal-trainer 中 UniSMS Python SDK 保持一致：
-    // 鉴权参数走 Query，短信内容参数走 JSON Body。
-    const params = new URLSearchParams();
-    params.append('action', 'sms.message.send');
-    params.append('accessKeyId', SMS_CONFIG.accessKeyId);
-
-    // 如果配置了 accessKeySecret，使用 HMAC-SHA256 签名模式
-    if (SMS_CONFIG.accessKeySecret) {
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const nonce = crypto.randomBytes(8).toString('hex');
-
-      params.append('algorithm', 'hmac-sha256');
-      params.append('timestamp', timestamp);
-      params.append('nonce', nonce);
-
-      const signStr = [...params.entries()]
-        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-        .map(([key, value]) => `${key}=${value}`)
-        .join('&');
-      const signature = crypto
-        .createHmac('sha256', SMS_CONFIG.accessKeySecret)
-        .update(signStr)
-        .digest('hex');
-      params.append('signature', signature);
-    }
-
-    const url = `https://uni.apistd.com/?${params.toString()}`;
-    const body = {
-      to: phone,
-      signature: SMS_CONFIG.signature,
-      templateId: SMS_CONFIG.templateId,
-      templateData: { code },
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'User-Agent': 'uni-python-sdk/0.2.0',
-        'Content-Type': 'application/json;charset=utf-8',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const responseText = await response.text();
-    let result;
-    try {
-      result = JSON.parse(responseText);
-    } catch (e) {
-      result = { code: String(response.status), message: responseText || response.statusText };
-    }
-    console.log('[SMS] API 响应:', JSON.stringify(result));
-
-    const messageStatuses = Array.isArray(result.data && result.data.messages)
-      ? result.data.messages.map(message => message.status)
-      : [];
-    const smsAccepted =
-      result.code === '0' &&
-      (
-        result.message === 'Success' ||
-        (result.data && result.data.code === 'OK') ||
-        messageStatuses.some(status => ['sent', 'delivered', 'accepted'].includes(status))
-      );
-
-    if (response.ok && smsAccepted) {
-      console.log(`[SMS] 验证码已发送到 ${phone}`);
-      return { sent: true };
-    }
-    console.warn('[SMS] 发送失败:', JSON.stringify(result));
-    return {
-      sent: false,
-      error: (result.data && (result.data.message || result.data.code)) ||
-        result.message ||
-        `短信服务返回异常 (${result.code || response.status})`,
-    };
-  } catch (e) {
-    console.warn('[SMS] 发送异常:', e.message);
-    return { sent: false, error: e.message };
-  }
 }
 
 // ============================================================
@@ -540,51 +373,42 @@ if (PUBLIC_BASE_PATH) {
 //  Auth API 接口
 // ============================================================
 
-// 发送验证码
-app.post(routePath('/api/auth/send-code'), async (req, res) => {
+// 登录（手机号 + 密码，首次登录自动注册）
+app.post(routePath('/api/auth/login'), async (req, res) => {
   const phone = String(req.body.phone || '').replace(/\D/g, '').slice(0, 11);
+  const password = String(req.body.password || '');
 
   if (!phone || !/^1\d{10}$/.test(phone)) {
     return res.status(400).json({ error: '请输入正确的手机号' });
   }
 
-  const code = generateCode();
-  storeCode(phone, code);
-
-  // 尝试发送短信（失败不阻塞）
-  const smsResult = await sendSms(phone, code);
-
-  console.log(`[Auth] 验证码 for ${phone}: ${code}${smsResult.sent ? ' (SMS已发送)' : ' (SMS未发送)'}`);
-
-  const payload = {
-    message: smsResult.sent ? '验证码已发送，请查收短信' : '验证码已生成',
-    sms_sent: smsResult.sent,
-  };
-
-  if (smsResult.error) payload.sms_error = smsResult.error;
-  if (SHOULD_RETURN_DEBUG_CODE || !smsResult.sent) payload.debug_code = code;
-
-  res.json(payload);
-});
-
-// 登录
-app.post(routePath('/api/auth/login'), async (req, res) => {
-  const phone = String(req.body.phone || '').replace(/\D/g, '').slice(0, 11);
-  const { code } = req.body;
-
-  if (!phone || !code) {
-    return res.status(400).json({ error: '请提供手机号和验证码' });
+  if (!password) {
+    return res.status(400).json({ error: '请输入密码' });
   }
 
-  if (!verifyAndConsumeCode(phone, code)) {
-    return res.status(400).json({ error: '验证码错误或已过期' });
+  if (password.length < 6) {
+    return res.status(400).json({ error: '密码至少 6 位' });
   }
 
-  // 查找或创建用户
+  // 查找用户
   let user = await getUserByPhone(phone);
-  if (!user) {
+
+  if (user) {
+    // 已有账号：验证密码
+    if (!user.password_hash) {
+      // 历史用户（SMS 迁移），自动设置密码
+      const passwordHash = hashPassword(password);
+      await updateUserPassword(user.id, passwordHash);
+      user.password_hash = passwordHash;
+      console.log(`[Auth] 历史用户设置密码: ${phone}`);
+    } else if (!verifyPassword(password, user.password_hash)) {
+      return res.status(400).json({ error: '密码错误' });
+    }
+  } else {
+    // 新注册用户
     const nickname = `用户${phone.slice(-4)}`;
-    user = await createUser(phone, nickname);
+    const passwordHash = hashPassword(password);
+    user = await createUser(phone, nickname, passwordHash);
     console.log(`[Auth] 新用户注册: ${phone} (${user.id})`);
   }
 

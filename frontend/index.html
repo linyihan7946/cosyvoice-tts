@@ -46,36 +46,8 @@
       margin-bottom: 8px;
     }
 
-    .phone-input-row {
-      display: flex;
-      gap: 10px;
-    }
-    .phone-input-row input {
-      flex: 1;
-      padding: 12px 16px;
-      border: 2px solid #e8e8e8;
-      border-radius: 10px;
-      font-size: 15px;
-      transition: border-color 0.2s;
-      font-family: inherit;
-    }
-    .phone-input-row input:focus { outline: none; border-color: #667eea; }
-
-    .send-code-btn {
-      padding: 12px 16px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #fff;
-      border: none;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: opacity 0.2s;
-    }
-    .send-code-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .login-form input[type="text"] {
+    .login-form input[type="text"],
+    .login-form input[type="password"] {
       width: 100%;
       padding: 12px 16px;
       border: 2px solid #e8e8e8;
@@ -83,10 +55,10 @@
       font-size: 15px;
       transition: border-color 0.2s;
       font-family: inherit;
-      letter-spacing: 4px;
-      text-align: center;
+      box-sizing: border-box;
     }
-    .login-form input[type="text"]:focus { outline: none; border-color: #667eea; }
+    .login-form input[type="text"]:focus,
+    .login-form input[type="password"]:focus { outline: none; border-color: #667eea; }
 
     .login-btn {
       width: 100%;
@@ -1324,19 +1296,16 @@
   <div class="login-container show" id="loginContainer">
     <div class="login-header">
       <h1>🎙️ 文字转语音助手</h1>
-      <p>手机号验证登录，开始语音合成</p>
+      <p>使用手机号和密码登录</p>
     </div>
     <div class="login-form">
       <div class="form-group">
         <label>📱 手机号</label>
-        <div class="phone-input-row">
-          <input type="text" id="phoneInput" placeholder="请输入手机号" maxlength="11" autocomplete="tel">
-          <button class="send-code-btn" id="sendCodeBtn" onclick="sendCode()">获取验证码</button>
-        </div>
+        <input type="text" id="phoneInput" placeholder="请输入手机号" maxlength="11" autocomplete="tel">
       </div>
       <div class="form-group">
-        <label>🔐 验证码</label>
-        <input type="text" id="codeInput" placeholder="请输入6位验证码" maxlength="6" autocomplete="one-time-code">
+        <label>🔐 密码</label>
+        <input type="password" id="passwordInput" placeholder="请输入密码（首次登录自动注册）" autocomplete="current-password">
       </div>
       <button class="login-btn" id="loginBtn" onclick="login()">登 录</button>
       <div class="login-error" id="loginError"></div>
@@ -1702,7 +1671,6 @@
     }
 
     // ===== 登录逻辑 =====
-    let sendCodeTimer = null;
 
     function normalizePhone(phone) {
       return phone.replace(/\D/g, '').slice(0, 11);
@@ -1735,84 +1703,28 @@
       document.getElementById('mainContainer').classList.add('show');
     }
 
-    async function sendCode() {
-      const phoneInput = document.getElementById('phoneInput');
-      const phone = normalizePhone(phoneInput.value);
-      const btn = document.getElementById('sendCodeBtn');
-      const loginError = document.getElementById('loginError');
-
-      phoneInput.value = phone;
-      loginError.classList.remove('show');
-
-      if (!/^1\d{10}$/.test(phone)) {
-        showLoginNotice('error', '❌ 请输入正确的手机号');
-        return;
-      }
-
-      btn.disabled = true;
-
-      try {
-        const response = await fetch('api/auth/send-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || '发送失败');
-        }
-
-        // 调试码仅在服务端允许时返回；返回后用于短信不可达兜底。
-        if (data.debug_code) {
-          console.log(`[DEV] 验证码: ${data.debug_code}`);
-        }
-
-        if (data.sms_sent) {
-          showLoginNotice('success', '✅ 验证码已发送，请查收短信');
-        } else if (data.debug_code) {
-          const reason = data.sms_error ? `（${data.sms_error}）` : '';
-          showLoginNotice('warning', `💡 短信未发送${reason}，可直接使用验证码：${data.debug_code}`);
-        } else {
-          showLoginNotice('warning', '💡 验证码已生成，如果短信未收到，请稍后重试');
-        }
-
-        // 60 秒倒计时
-        let countdown = 60;
-        btn.textContent = `${countdown}s 后重发`;
-        sendCodeTimer = setInterval(() => {
-          countdown--;
-          btn.textContent = `${countdown}s 后重发`;
-          if (countdown <= 0) {
-            clearInterval(sendCodeTimer);
-            btn.textContent = '获取验证码';
-            btn.disabled = false;
-          }
-        }, 1000);
-      } catch (error) {
-        showLoginNotice('error', '❌ ' + (error.message || '发送失败，请稍后重试'));
-        btn.disabled = false;
-      }
-    }
-
     async function login() {
       const phoneInput = document.getElementById('phoneInput');
       const phone = normalizePhone(phoneInput.value);
-      const code = document.getElementById('codeInput').value.trim();
+      const password = document.getElementById('passwordInput').value;
       const btn = document.getElementById('loginBtn');
       const loginError = document.getElementById('loginError');
 
       phoneInput.value = phone;
       loginError.classList.remove('show');
 
-      if (!phone || !code) {
-        showLoginNotice('error', '❌ 请输入手机号和验证码');
+      if (!phone || !/^1\d{10}$/.test(phone)) {
+        showLoginNotice('error', '❌ 请输入正确的手机号');
         return;
       }
 
-      if (code.length !== 6) {
-        showLoginNotice('error', '❌ 请输入6位验证码');
+      if (!password) {
+        showLoginNotice('error', '❌ 请输入密码');
+        return;
+      }
+
+      if (password.length < 6) {
+        showLoginNotice('error', '❌ 密码至少 6 位');
         return;
       }
 
@@ -1823,7 +1735,7 @@
         const response = await fetch('api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, code }),
+          body: JSON.stringify({ phone, password }),
         });
 
         const data = await response.json();
@@ -1855,14 +1767,11 @@
         showLoginPage();
         // 重置登录表单
         document.getElementById('phoneInput').value = '';
-        document.getElementById('codeInput').value = '';
+        document.getElementById('passwordInput').value = '';
         document.getElementById('loginError').classList.remove('show');
         document.getElementById('loginError').style.background = '#fff2f0';
         document.getElementById('loginError').style.border = '1px solid #ffccc7';
         document.getElementById('loginError').style.color = '#cf1322';
-        document.getElementById('sendCodeBtn').textContent = '获取验证码';
-        document.getElementById('sendCodeBtn').disabled = false;
-        if (sendCodeTimer) clearInterval(sendCodeTimer);
       }
     }
 
@@ -2294,11 +2203,11 @@
     });
 
     // ===== 登录回车键 =====
-    document.getElementById('codeInput').addEventListener('keydown', function(e) {
+    document.getElementById('passwordInput').addEventListener('keydown', function(e) {
       if (e.key === 'Enter') login();
     });
     document.getElementById('phoneInput').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') sendCode();
+      if (e.key === 'Enter') document.getElementById('passwordInput').focus();
     });
 
     // ===== 录音功能 =====

@@ -92,11 +92,26 @@ async function initTables() {
     CREATE TABLE IF NOT EXISTS users (
       id VARCHAR(64) PRIMARY KEY,
       phone VARCHAR(20) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL DEFAULT '',
       nickname VARCHAR(255) NOT NULL DEFAULT '',
       is_admin TINYINT(1) NOT NULL DEFAULT 0,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // 迁移：为已存在的 users 表添加 password_hash 列
+  try {
+    await db.query(`ALTER TABLE users ADD COLUMN password_hash VARCHAR(255) NOT NULL DEFAULT '' AFTER phone`);
+    console.log('[DB] 迁移完成：users 表已添加 password_hash 列');
+  } catch (e) {
+    // ER_DUP_FIELDNAME 表示列已存在，可以忽略
+    if (e.code !== 'ER_DUP_FIELDNAME') {
+      // 其他错误也忽略（如内存数据库不支持 ALTER TABLE）
+      if (e.code !== 'ER_NOT_SUPPORTED_YET') {
+        console.warn('[DB] 迁移 password_hash 列:', e.message);
+      }
+    }
+  }
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS custom_voices (
@@ -262,14 +277,14 @@ async function getUserById(id) {
   return normalizeRow(rows[0]);
 }
 
-async function createUser(phone, nickname) {
+async function createUser(phone, nickname, passwordHash = '') {
   const id = newUuid();
-  const user = { id, phone, nickname: nickname || `用户${phone.slice(-4)}`, is_admin: 0, created_at: new Date().toISOString() };
+  const user = { id, phone, password_hash: passwordHash, nickname: nickname || `用户${phone.slice(-4)}`, is_admin: 0, created_at: new Date().toISOString() };
   if (memory) {
     memory.users.push(user);
     return user;
   }
-  await query('INSERT INTO users (id, phone, nickname) VALUES (?, ?, ?)', [id, phone, user.nickname]);
+  await query('INSERT INTO users (id, phone, password_hash, nickname) VALUES (?, ?, ?, ?)', [id, phone, passwordHash, user.nickname]);
   return getUserById(id);
 }
 
@@ -280,6 +295,15 @@ async function setUserAdmin(userId, isAdmin) {
     return;
   }
   await query('UPDATE users SET is_admin = ? WHERE id = ?', [isAdmin ? 1 : 0, userId]);
+}
+
+async function updateUserPassword(userId, passwordHash) {
+  if (memory) {
+    const user = await getUserById(userId);
+    if (user) user.password_hash = passwordHash;
+    return;
+  }
+  await query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
 }
 
 async function deleteUser(userId) {
@@ -725,6 +749,7 @@ module.exports = {
   getUserById,
   createUser,
   setUserAdmin,
+  updateUserPassword,
   deleteUser,
   getCustomVoicesByUserId,
   getTodayCloneCount,
